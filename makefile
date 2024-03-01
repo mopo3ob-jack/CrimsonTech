@@ -1,4 +1,4 @@
-CFLAGS = -O2 -std=c++23
+CFLAGS = -O2 -std=c++23 -ffast-math -fsanitize=leak
 LDFLAGS = -lGL -lglfw
 
 SOURCE = $(shell find ./src/ -name "*.cpp")
@@ -19,3 +19,4 @@ crimson: $(OBJECT)
 .PHONY: clean
 clean:
 	rm $(shell find ./lib/ -name "*.o")
+	rm ./glad/lib/glad.o

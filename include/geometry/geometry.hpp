@@ -3,5 +3,6 @@
 
 #include "Vertex.hpp"
 #include "Plane.hpp"
+#include "Transform.hpp"
 
 #endif

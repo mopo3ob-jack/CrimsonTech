@@ -1,5 +1,5 @@
-#ifndef HDB_CT_VECTOR3_HPP
-#define HDB_CT_VECTOR3_HPP
+#ifndef HDB_CT_VECTOR3F_HPP
+#define HDB_CT_VECTOR3F_HPP
 
 #include "Vector.hpp"
 
@@ -13,16 +13,16 @@
 
 namespace hdb {
 
-template <typename T>
-class Vector<T, 3> {
+template <>
+class Vector<float, 3> {
 public:
 	constexpr Vector() {}
 
-	constexpr Vector(T s) {
+	constexpr Vector(float s) {
 		x = s; y = s; z = s;
 	}
 
-	constexpr Vector(T x, T y, T z) {
+	constexpr Vector(float x, float y, float z) {
 		this->x = x; this->y = y; this->z = z;
 	}
 
@@ -35,17 +35,54 @@ public:
 		return Vector(-x, -y, -z);
 	}
 
-	constexpr Vector operator*(T s) const {
+	constexpr Vector operator*(float s) const {
 		return Vector(x * s, y * s, z * s);
 	}
 
-	constexpr Vector operator/(T s) const {
-		T is = 1.0f / s;
+	constexpr Vector operator/(float s) const {
+		float is = 1.0f / s;
 		return Vector(x * is, y * is, z * is);
 	}
 
+	constexpr Vector normalize() {
+		float p = x * x + y * y + z * z;
+
+		if (std::is_constant_evaluated()) {
+			p = 1.0f / sqrt(p);
+		} else {
+			__m128 mag = _mm_load_ss(&p);
+			mag = _mm_rsqrt_ss(mag);
+			_mm_store_ss(&p, mag);
+		}
+
+		this->operator*=(p);
+		return *this;
+	}
+
+	static constexpr Vector normalize(Vector vector) {
+		float p = vector.x * vector.x + vector.y * vector.y + vector.z * vector.z;
+
+		if (std::is_constant_evaluated()) {
+			p = 1.0f / sqrt(p);
+		} else {
+			__m128 mag = _mm_load_ss(&p);
+			mag = _mm_rsqrt_ss(mag);
+			_mm_store_ss(&p, mag);
+		}
+
+		return vector * p;
+	}
+
 	constexpr Vector normal() const {
-		T p = (T)1 / sqrt(x * x + y * y + z * z);
+		float p = x * x + y * y + z * z;
+
+		if (std::is_constant_evaluated()) {
+			p = 1.0f / sqrt(p);
+		} else {
+			__m128 mag = _mm_load_ss(&p);
+			mag = _mm_rsqrt_ss(mag);
+			_mm_store_ss(&p, mag);
+		}
 
 		Vector ret = *this;
 
@@ -54,32 +91,18 @@ public:
 		return ret;
 	}
 
-	constexpr Vector normalize() {
-		T p = (T)1 / sqrt(x * x + y * y + z * z);
-
-		*this *= p;
-
-		return *this;
-	}
-
-	static constexpr Vector normalize(Vector vector) {
-		T p = (T)1 / sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
-
-		return vector * p;
-	}
-
-	constexpr T dot(Vector vector) const {
+	constexpr float dot(Vector vector) const {
 		return x * vector.x + y * vector.y + z * vector.z;
 	}
 
-	static constexpr T dot(Vector a, Vector b) {
+	static constexpr float dot(Vector a, Vector b) {
 		return a.x * b.x + a.y * b.y + a.z * b.z;
 	}
 
-	constexpr T magnitude() const {
+	constexpr float magnitude() const {
 		return sqrt(x * x + y * y + z * z);
 	}
-
+	
 	constexpr Vector cross(Vector vector) const {
 		return Vector(y * vector.z - z * vector.y, z * vector.x - x * vector.z, x * vector.y - y * vector.x);
 	}
@@ -87,12 +110,13 @@ public:
 	static constexpr Vector cross(Vector a, Vector b) {
 		return Vector(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 	}
+
 	static constexpr const unsigned int getDimension() { return 3; }
 
 	union {
-		T data[3];
-		struct { T x, y, z; };
-		struct { T r, g, b; };
+		float data[3];
+		struct { float x, y, z; };
+		struct { float r, g, b; };
 	};
 };
 

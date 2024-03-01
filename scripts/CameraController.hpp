@@ -11,11 +11,11 @@ class CameraController : public ScriptBase {
 public:
 	void start() {
 		camera->fov = M_PI * 0.75f;
-		camera->position = Vector3(0.0f, 0.0f, -1.0f);
-		camera->rotation = Vector3(0.0f);
+		camera->position = Vector3f(0.0f, 0.0f, -1.0f);
+		camera->rotation = Vector3f(0.0f);
 
 		speed = 1.0f;
-		sensitivity = 1.8f;
+		sensitivity = 18.0f;
 	}
 
 	void update() {
@@ -49,8 +49,8 @@ public:
 			camera->position.y += Time::deltaTime * speed;
 		}
 
-		camera->rotation.x += Input::mouseDelta.y * sensitivity;
-		camera->rotation.y -= Input::mouseDelta.x * sensitivity;
+		camera->rotation.x += Input::mouseDelta.y * sensitivity * Time::deltaTime;
+		camera->rotation.y -= Input::mouseDelta.x * sensitivity * Time::deltaTime;
 
 		if (camera->rotation.x > M_PI_2)
 			camera->rotation.x = M_PI_2;

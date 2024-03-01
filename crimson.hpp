@@ -8,7 +8,6 @@
 #include "include/file/file.hpp"
 #include "include/render/render.hpp"
 #include "include/utils/utils.hpp"
-#include "include/mesh/mesh.hpp"
 #include "include/network/network.hpp"
 
 #endif

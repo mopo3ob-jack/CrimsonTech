@@ -3,5 +3,8 @@
 
 #include "ShaderProgram.hpp"
 #include "Camera.hpp"
+#include "RenderBatch.hpp"
+#include "TextureHandler.hpp"
+#include "TransformHandler.hpp"
 
 #endif

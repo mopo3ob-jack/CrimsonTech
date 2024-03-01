@@ -32,10 +32,10 @@ public:
 			Time::fps = 1.0f / Time::deltaTime;
 			previousTime = Time::time;
 
-			static Vector2 previousMouse;
+			static Vector2f previousMouse;
 
 			glfwGetCursorPos(window, &Input::mouseX, &Input::mouseY);
-			Input::mousePosition = Vector2((Input::mouseX * invWidth) * 2.0f - 1.0f, 1.0f - (Input::mouseY * invHeight) * 2.0f);
+			Input::mousePosition = Vector2f((Input::mouseX * invWidth) * 2.0f - 1.0f, 1.0f - (Input::mouseY * invHeight) * 2.0f);
 			Input::mouseDelta = Input::mousePosition - previousMouse;
 			previousMouse = Input::mousePosition;
 

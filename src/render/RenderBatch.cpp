@@ -1,4 +1,4 @@
-#include "../../include/mesh/RenderBatch.hpp"
+#include "../../include/render/RenderBatch.hpp"
 
 namespace hdb {
 
@@ -29,12 +29,13 @@ void RenderBatch::genNecessities() {
 	if (!isInstantiated) {
 		glVertexArrayAttribFormat(vertexArrayObject, 0, 3, GL_FLOAT, GL_FALSE, 0);
 		glVertexArrayAttribFormat(vertexArrayObject, 1, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, texCoords));
-		glVertexArrayAttribFormat(vertexArrayObject, 2, 4, GL_UNSIGNED_BYTE, GL_FALSE, offsetof(Vertex, color));
-		glVertexArrayAttribFormat(vertexArrayObject, 3, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, normal));
-		glVertexArrayAttribFormat(vertexArrayObject, 4, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, tangent));
-		glVertexArrayAttribFormat(vertexArrayObject, 5, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, bitangent));
+		glVertexArrayAttribFormat(vertexArrayObject, 2, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, normal));
+		glVertexArrayAttribFormat(vertexArrayObject, 3, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, tangent));
+		glVertexArrayAttribFormat(vertexArrayObject, 4, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, bitangent));
+		glVertexArrayAttribFormat(vertexArrayObject, 5, 1, GL_UNSIGNED_INT, GL_FALSE, offsetof(Vertex, textureID));
+		glVertexArrayAttribFormat(vertexArrayObject, 6, 1, GL_UNSIGNED_INT, GL_FALSE, offsetof(Vertex, transformID));
 		
-		for (unsigned int i = 0; i < 6; ++i) {
+		for (unsigned int i = 0; i < 7; ++i) {
 			glEnableVertexArrayAttrib(vertexArrayObject, i);
 			glVertexArrayAttribBinding(vertexArrayObject, i, 0);
 		}

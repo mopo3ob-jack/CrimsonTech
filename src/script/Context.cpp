@@ -14,8 +14,8 @@ double Time::time;
 float Time::deltaTime;
 float Time::fps;
 
-Vector2 Input::mousePosition;
-Vector2 Input::mouseDelta;
+Vector2f Input::mousePosition;
+Vector2f Input::mouseDelta;
 double Input::mouseX;
 double Input::mouseY;
 

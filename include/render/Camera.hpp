@@ -5,10 +5,6 @@
 #include "../tensor/tensor.hpp"
 #include "../../glad/include/glad/glad.h"
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
 namespace hdb {
 
 namespace ct {
@@ -59,8 +55,8 @@ public:
 		glUniformMatrix4fv(viewUniform, 1, GL_TRUE, (float*)vm.data);
 	}
 
-	Vector3 position;
-	Vector3 rotation;
+	Vector3f position;
+	Vector3f rotation;
 	float fov;
 
 	unsigned int shaderProgram;

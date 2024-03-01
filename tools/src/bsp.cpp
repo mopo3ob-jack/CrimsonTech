@@ -24,7 +24,7 @@ unsigned int nodeCount;
 
 struct Face {
 	Plane plane;
-	Vector3* vertices;
+	Vector3f* vertices;
 	BSPNode* node;
 	unsigned int count;
 	bool isProcessed;
@@ -33,14 +33,14 @@ struct Face {
 unsigned int faceCount;
 unsigned int maxFaces;
 
-Vector3* vertices;
+Vector3f* vertices;
 unsigned int vertexCount;
 unsigned int maxVertices;
 
 namespace ClipResult {
 
-std::vector<Vector3> front;
-std::vector<Vector3> back;
+std::vector<Vector3f> front;
+std::vector<Vector3f> back;
 
 }
 
@@ -75,7 +75,7 @@ void import(char* path, float vertexRatio) {
 
 			unsigned int oldVertexIndex = vertexIndex;
 			for (unsigned int v = 0; v < face.mNumIndices; ++v) {
-				vertices[vertexIndex] = *(Vector3*)(mesh->mVertices + face.mIndices[v]);
+				vertices[vertexIndex] = *(Vector3f*)(mesh->mVertices + face.mIndices[v]);
 				float temp = vertices[vertexIndex].y;
 				vertices[vertexIndex].y = vertices[vertexIndex].z;
 				vertices[vertexIndex++].z = -temp;
@@ -92,28 +92,28 @@ void import(char* path, float vertexRatio) {
 	}
 }
 
-void clipPolygon(const Plane& plane, const Vector3* vertices, unsigned int vertexCount) {
+void clipPolygon(const Plane& plane, const Vector3f* vertices, unsigned int vertexCount) {
 	ClipResult::front.clear();
 	ClipResult::back.clear();
 
 	float distanceA = plane.distanceToPlane(vertices[0]);
 
 	for (unsigned int i = 1; i < vertexCount; ++i) {
-		const Vector3& a = vertices[i - 1];
-		const Vector3& b = vertices[i];
+		const Vector3f& a = vertices[i - 1];
+		const Vector3f& b = vertices[i];
 		float distanceB = plane.distanceToPlane(b);
 
 		if (distanceA >= 0.0f) {
 			ClipResult::front.push_back(a);
 			if (distanceB < 0.0f) {
-				Vector3 p = plane.intersection(a, b);
+				Vector3f p = plane.intersection(a, b);
 				ClipResult::front.push_back(p);
 				ClipResult::back.push_back(p);
 			}
 		} else {
 			ClipResult::back.push_back(a);
 			if (distanceB >= 0.0f) {
-				Vector3 p = plane.intersection(a, b);
+				Vector3f p = plane.intersection(a, b);
 				ClipResult::front.push_back(p);
 				ClipResult::back.push_back(p);
 			}
@@ -122,21 +122,21 @@ void clipPolygon(const Plane& plane, const Vector3* vertices, unsigned int verte
 		distanceA = distanceB;
 	}
 
-	const Vector3& a = vertices[vertexCount - 1];
-	const Vector3& b = vertices[0];
+	const Vector3f& a = vertices[vertexCount - 1];
+	const Vector3f& b = vertices[0];
 	float distanceB = plane.distanceToPlane(b);
 
 	if (distanceA >= 0.0f) {
 		ClipResult::front.push_back(a);
 		if (distanceB < 0.0f) {
-			Vector3 p = plane.intersection(a, b);
+			Vector3f p = plane.intersection(a, b);
 			ClipResult::front.push_back(p);
 			ClipResult::back.push_back(p);
 		}
 	} else {
 		ClipResult::back.push_back(a);
 		if (distanceB >= 0.0f) {
-			Vector3 p = plane.intersection(a, b);
+			Vector3f p = plane.intersection(a, b);
 			ClipResult::front.push_back(p);
 			ClipResult::back.push_back(p);
 		}

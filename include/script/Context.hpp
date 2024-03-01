@@ -26,8 +26,8 @@ namespace Context {
 	};
 
 	struct Input {
-		static Vector2 mousePosition;
-		static Vector2 mouseDelta;
+		static Vector2f mousePosition;
+		static Vector2f mouseDelta;
 		static double mouseX, mouseY;
 	};
 }
@@ -50,6 +50,27 @@ static void initCrimson(unsigned int width, unsigned int height, const char* tit
 
 		exit(1);
 	}
+
+	glGetTextureHandleARB = (PFNGLGETTEXTUREHANDLEARBPROC)glfwGetProcAddress("glGetTextureHandleARB");
+	glMakeTextureHandleResidentARB = (PFNGLMAKETEXTUREHANDLERESIDENTARBPROC)glfwGetProcAddress("glMakeTextureHandleResidentARB");
+	glMakeTextureHandleNonResidentARB = (PFNGLMAKETEXTUREHANDLENONRESIDENTARBPROC)glfwGetProcAddress("glMakeTextureHandleNonResidentARB");
+	
+
+	bool triggerError = false;
+	if (!glGetTextureHandleARB) {
+		hdb::error("glGetTextureHandleARB is equal to NULL\n");
+		triggerError = true;
+	}
+	if (!glMakeTextureHandleResidentARB) {
+		hdb::error("glMakeTextureHandleResidentARB is equal to NULL\n");
+		triggerError = true;
+	}
+	if (!glMakeTextureHandleNonResidentARB) {
+		hdb::error("glMakeTextureHandleNonResidentARB is equal to NULL\n");
+		triggerError = true;
+	}
+	if (triggerError)
+		hdb::error("Check if you have a graphics card that supports OpenGL 4.0 or higher!\n\tAnd can use GL_ARB_BINDLESS_TEXTURE\n\t(Preferably OpenGL 4.5)\n");
 }
 
 static void terminateCrimson() {

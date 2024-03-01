@@ -1,6 +1,5 @@
 #include "crimson.hpp"
 #include "scripts/scripts.hpp"
-
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -8,6 +7,20 @@
 
 using namespace hdb;
 using namespace hdb::ct;
+
+std::vector<unsigned char> image;
+void genImage() {
+	image.resize(0x10000 * 3);
+	for (unsigned int y = 0; y < 256; ++y) {
+		for (unsigned int x = 0; x < 256; ++x) {
+			unsigned int i = (y * 256 + x) * 3;
+			unsigned int v = (y >> 3) & x >> 3;
+			image[i] = v;
+			image[i + 1] = v;
+			image[i + 2] = v;
+		}
+	}
+}
 
 class CrimsonTest : public AppBase {
 public:
@@ -27,8 +40,8 @@ public:
 
 		camera = Camera(shader.getShaderProgram());
 		camera.fov = M_PI * 0.75f;
-		camera.position = Vector3(0.0f);
-		camera.rotation = Vector3(0.0f);
+		camera.position = Vector3f(0.0f);
+		camera.rotation = Vector3f(0.0f);
 		aspectRatio = (float)mode->width / (float)mode->height;
 		camera.position.z = -2.0f;
 
@@ -39,15 +52,17 @@ public:
 		scriptHandler.addScript(&cameraController);
 
 		Vertex cubeVertices[] = {
-			{{-1.0f, -1.0f, -1.0f}, {}, {255, 0, 0}, {}, {}, {}},
-			{{1.0f, -1.0f, -1.0f}, {}, {0, 255, 0}, {}, {}, {}},
-			{{1.0f, 1.0f, -1.0f}, {}, {0, 0, 255}, {}, {}, {}},
-			{{-1.0f, 1.0f, -1.0f}, {}, {255, 255, 0}, {}, {}, {}},
-			{{1.0f, -1.0f, 1.0f}, {}, {0, 255, 255}, {}, {}, {}},
-			{{-1.0f, -1.0f, 1.0f}, {}, {255, 255, 255}, {}, {}, {}},
-			{{-1.0f, 1.0f, 1.0f}, {}, {255, 255, 0}, {}, {}, {}},
-			{{1.0f, 1.0f, 1.0f}, {}, {0, 0, 0}, {}, {}, {}}
+			{{-1.0f, -1.0f, -1.0f}, {}, {}, {}, {}, 0},
+			{{1.0f, -1.0f, -1.0f}, {}, {}, {}, {}, 0},
+			{{1.0f, 1.0f, -1.0f}, {}, {}, {}, {}, 0},
+			{{-1.0f, 1.0f, -1.0f}, {}, {}, {}, {}, 0},
+			{{1.0f, -1.0f, 1.0f}, {}, {}, {}, {}, 0},
+			{{-1.0f, -1.0f, 1.0f}, {}, {}, {}, {}, 0},
+			{{-1.0f, 1.0f, 1.0f}, {}, {}, {}, {}, 0},
+			{{1.0f, 1.0f, 1.0f}, {}, {}, {}, {}, 0}
 		};
+
+		Vector2uc foo;
 
 		unsigned int cubeIndices[] = {
 			0, 1, 2,	0, 2, 3,	//Front
@@ -61,6 +76,11 @@ public:
 		cube.allocateBuffers(1);
 		cube.vertexData(cubeVertices, 8, GL_STATIC_DRAW);
 		cube.indexData(0, cubeIndices, 36, GL_STATIC_DRAW);
+
+		genImage();
+		textureHandler.resize(1);
+		textureHandler.updateTexture(0, image.data(), 256, 256);
+		textureHandler.makeTexturesResident();
 	}
 
 	void update() override {
@@ -77,6 +97,7 @@ public:
 		shader.useProgram();
 		camera.updateUniform(aspectRatio, 0.1f, 914.4f);
 
+		// textureHandler.bindBuffer();
 		cube.render(0);
 
 		glfwSwapBuffers(window);
@@ -90,6 +111,8 @@ public:
 	
 	//Renderables
 	RenderBatch cube;
+
+	TextureHandler textureHandler;
 
 	//Scripts
 	CameraController cameraController;

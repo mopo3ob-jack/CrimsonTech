@@ -9,11 +9,11 @@ namespace ct {
 
 class Line {
 public:
-	constexpr Vector3 intersection(Line line) {
-		return Vector3();
+	constexpr Vector3f intersection(Line line) {
+		return Vector3f();
 	}
 
-	Vector3 a, b;
+	Vector3f a, b;
 };
 
 }

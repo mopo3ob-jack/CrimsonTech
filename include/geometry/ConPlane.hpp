@@ -11,7 +11,7 @@ namespace ct {
 //Conservative Plane uses less memory at the cost of having slower computations
 class ConPlane {
 public:
-	Vector3 direction;
+	Vector3f direction;
 };
 
 }

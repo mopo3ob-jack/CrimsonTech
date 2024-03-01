@@ -79,8 +79,9 @@ public:
 		dimension == rows;
 		dimension == columns;
 	}
-	constexpr Vector<dimension> operator*(Vector<dimension> factor) {
-		Vector<dimension> result;
+	
+	constexpr Vector<float, dimension> operator*(Vector<float, dimension> factor) {
+		Vector<float, dimension> result;
 
 		for (unsigned int row = 0; row < dimension; ++row) {
 			float sum = 0.0f;

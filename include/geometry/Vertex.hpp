@@ -8,12 +8,13 @@ namespace hdb {
 namespace ct {
 
 struct Vertex {
-	Vector3 position;
-	Vector2 texCoords;
-	unsigned char color[4];
-	Vector3 normal;
-	Vector3 tangent;
-	Vector3 bitangent;
+	Vector3f position;
+	Vector2f texCoords;
+	Vector3f normal;
+	Vector3f tangent;
+	Vector3f bitangent;
+	unsigned int textureID;
+	unsigned int transformID;
 };
 
 }
