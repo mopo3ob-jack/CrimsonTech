@@ -16,12 +16,14 @@ ExternalProject_Add(
 	mstd-download
 	GIT_REPOSITORY https://github.com/mopo3ob-jack/mstd.git
 	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${INSTALL_LOCATION}
+	UPDATE_DISCONNECTED TRUE
 )
 
 ExternalProject_Add(
 	glfw-download
 	GIT_REPOSITORY https://github.com/glfw/glfw.git
 	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${INSTALL_LOCATION}
+	UPDATE_DISCONNECTED TRUE
 )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
