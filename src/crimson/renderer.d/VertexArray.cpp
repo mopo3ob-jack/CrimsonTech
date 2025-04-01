@@ -1,5 +1,4 @@
 #include <crimson/renderer.d/VertexArray.hpp>
-#include <mstd/misc>
 
 namespace ct {
 
@@ -7,6 +6,8 @@ VertexArray::VertexArray(std::vector<VertexArray::Attribute> attributes) {
 	using namespace mstd;
 
 	vboCount = attributes.size();
+
+	mstd::alloc(vbos, attributes.size());
 
 	glCreateBuffers(attributes.size(), vbos);
 	glCreateBuffers(1, &ebo);

@@ -5,7 +5,7 @@
 
 #include <GLFW/glfw3.h>
 
-#include <random>
+#include <iostream>
 #include <GL/glu.h>
 
 using namespace mstd;
@@ -24,8 +24,14 @@ int main() {
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Cube", monitor, nullptr);
+
 	glfwMakeContextCurrent(window);
-	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+		std::cerr << "Failed to initialize GLAD\n" << std::endl;
+		return 1;
+	}
+
+	glfwSetFramebufferSizeCallback(window, resize);
 
 	Shader::CreateInfo createInfo = {
 		.vertexPath = "resources/shaders/shader.vert",
@@ -45,9 +51,6 @@ int main() {
 
 	bool isFullscreen = true;
 	bool f11Down = false;
-
-
-	glfwSetFramebufferSizeCallback(window, resize);
 
 	glViewport(0, 0, mode->width, mode->height);
 	glClearColor(0.674509804f, 0.988235294f, 0.95686274509f, 1.0f);

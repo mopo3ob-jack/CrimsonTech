@@ -3,7 +3,7 @@
 
 #include <glad/glad.h>
 #include <vector>
-#include <mstd/misc>
+#include <mstd/memory>
 #include <cstring>
 
 namespace ct {
@@ -46,6 +46,7 @@ public:
 			glDeleteBuffers(vboCount, vbos);
 			glDeleteBuffers(1, &ebo);
 			glDeleteVertexArrays(1, &vao);
+			mstd::free(vbos);
 		}
 	}
 
