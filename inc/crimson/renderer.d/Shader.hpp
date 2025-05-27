@@ -13,11 +13,11 @@ public:
 	Shader() {}
 
 	struct CreateInfo {
-		const mstd::C8* vertexPath;
-		const mstd::C8* tesselationControlPath;
-		const mstd::C8* tesselationEvaluationPath;
-		const mstd::C8* geometryPath;
-		const mstd::C8* fragmentPath;
+		const mstd::C8* vertexPath = nullptr;
+		const mstd::C8* tesselationControlPath = nullptr;
+		const mstd::C8* tesselationEvaluationPath = nullptr;
+		const mstd::C8* geometryPath = nullptr;
+		const mstd::C8* fragmentPath = nullptr;
 	};
 
 	Shader(const Shader& shader) = delete;
@@ -49,6 +49,10 @@ public:
 
 	operator mstd::Bool() const {
 		return shaderProgram;
+	}
+
+	void use() const {
+		glUseProgram(shaderProgram);
 	}
 
 private:

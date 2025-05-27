@@ -60,7 +60,6 @@ Shader::Shader(CreateInfo createInfo) {
 		std::cerr << errorText << "Shader programs must have a vertex stage\n";
 		return;
 	}
-	goto deleteShaders;
 	if (createInfo.tesselationControlPath) {
 		GLuint shader = generateShader(createInfo.tesselationControlPath, GL_TESS_CONTROL_SHADER);
 		if (shader) {
@@ -88,7 +87,7 @@ Shader::Shader(CreateInfo createInfo) {
 
 	shaderProgram = glCreateProgram();
 	for (auto i : shaders) {
-		if (i == -1) {
+		if (i == 0) {
 			glDeleteProgram(shaderProgram);
 			goto deleteShaders;
 		} else {

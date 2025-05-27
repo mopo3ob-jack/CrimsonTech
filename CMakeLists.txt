@@ -26,6 +26,13 @@ ExternalProject_Add(
 	UPDATE_DISCONNECTED TRUE
 )
 
+ExternalProject_Add(
+	assimp-download
+	GIT_REPOSITORY https://github.com/assimp/assimp.git
+	CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${INSTALL_LOCATION}
+	UPDATE_DISCONNECTED TRUE
+)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "inc" "*.hpp" "*.h")

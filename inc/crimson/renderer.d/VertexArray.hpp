@@ -4,17 +4,17 @@
 #include <glad/glad.h>
 #include <vector>
 #include <mstd/memory>
-#include <cstring>
+#include <type_traits>
 
 namespace ct {
 
 class VertexArray {
 public:
 	struct Attribute {
+		GLsizei stride;
 		GLint size;
 		GLenum type;
 		GLboolean normalized;
-		GLsizei stride;
 	};
 
 	VertexArray() {}
@@ -49,6 +49,29 @@ public:
 			mstd::free(vbos);
 		}
 	}
+
+	template <typename T>
+	void allocateAttributes(mstd::Size attribute, T* data, GLsizeiptr count, GLenum usage = GL_STATIC_DRAW) {
+		glNamedBufferData(vbos[attribute], count * sizeof(T), (void*)data, usage);
+	}
+
+	template <typename T>
+	void writeAttributes(mstd::Size attribute, T* data, GLsizeiptr count, GLintptr offset = 0L) {
+		glNamedBufferSubData(vbos[attribute], offset, count * sizeof(T), (void*)data);
+	}
+
+	template <typename T> requires std::is_integral_v<T>
+	void allocateElements(T* data, GLsizeiptr count, GLenum usage = GL_STATIC_DRAW) {
+		glNamedBufferData(ebo, count * sizeof(T), (void*)data, usage);
+	}
+
+	template <typename T> requires std::is_integral_v<T>
+	void writeElements(T* data, GLsizeiptr count, GLintptr offset = 0L) {
+		glNamedBufferSubData(ebo, offset, count * sizeof(T), (void*)data);
+	}
+
+	template <typename T> requires std::is_integral_v<T>
+	void draw(GLsizei count, mstd::Size offset) const;
 
 private:
 	GLuint* vbos;
