@@ -19,7 +19,7 @@ public:
 
 	VertexArray() {}
 
-	VertexArray(std::vector<Attribute> attributes);
+	VertexArray(const std::vector<Attribute>& attributes, mstd::Size vertexCount, mstd::Size elementSize);
 
 	VertexArray(VertexArray& vertexArray) = delete;
 	VertexArray& operator=(VertexArray& vertexArray) = delete;
@@ -28,14 +28,11 @@ public:
 	VertexArray& operator=(VertexArray&& vertexArray) {
 		this->~VertexArray();
 
-		this->vbos = vertexArray.vbos;
-		this->vboCount = vertexArray.vboCount;
+		this->attributeOffsets = std::move(vertexArray.attributeOffsets);
+		this->vbo = vertexArray.vbo;
 		this->ebo = vertexArray.ebo;
 		this->vao = vertexArray.vao;
 
-		vertexArray.vbos = nullptr;
-		vertexArray.vboCount = 0L;
-		vertexArray.ebo = 0;
 		vertexArray.vao = 0;
 
 		return *this;
@@ -43,39 +40,35 @@ public:
 
 	~VertexArray() {
 		if (vao) {
-			glDeleteBuffers(vboCount, vbos);
+			glDeleteBuffers(1, &vbo);
 			glDeleteBuffers(1, &ebo);
 			glDeleteVertexArrays(1, &vao);
-			mstd::free(vbos);
+			vao = 0;
 		}
 	}
 
 	template <typename T>
-	void allocateAttributes(mstd::Size attribute, T* data, GLsizeiptr count, GLenum usage = GL_STATIC_DRAW) {
-		glNamedBufferData(vbos[attribute], count * sizeof(T), (void*)data, usage);
-	}
-
-	template <typename T>
 	void writeAttributes(mstd::Size attribute, T* data, GLsizeiptr count, GLintptr offset = 0L) {
-		glNamedBufferSubData(vbos[attribute], offset, count * sizeof(T), (void*)data);
-	}
-
-	template <typename T> requires std::is_integral_v<T>
-	void allocateElements(T* data, GLsizeiptr count, GLenum usage = GL_STATIC_DRAW) {
-		glNamedBufferData(ebo, count * sizeof(T), (void*)data, usage);
+		glNamedBufferSubData(
+			vbo,
+			attributeOffsets[attribute] + offset * sizeof(T),
+			count * sizeof(T),
+			(void*)data
+		);
 	}
 
 	template <typename T> requires std::is_integral_v<T>
 	void writeElements(T* data, GLsizeiptr count, GLintptr offset = 0L) {
-		glNamedBufferSubData(ebo, offset, count * sizeof(T), (void*)data);
+		glNamedBufferSubData(ebo, offset * sizeof(T), count * sizeof(T), (void*)data);
 	}
 
 	template <typename T> requires std::is_integral_v<T>
 	void draw(GLsizei count, mstd::Size offset) const;
 
 private:
-	GLuint* vbos;
-	mstd::Size vboCount;
+	std::vector<GLintptr> attributeOffsets;
+
+	GLuint vbo = 0;
 	GLuint ebo = 0;
 	GLuint vao = 0;
 };

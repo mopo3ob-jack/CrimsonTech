@@ -2,23 +2,33 @@
 
 namespace ct {
 
-VertexArray::VertexArray(std::vector<VertexArray::Attribute> attributes) {
+VertexArray::VertexArray(
+	const std::vector<VertexArray::Attribute>& attributes,
+	mstd::Size vertexCount,
+	mstd::Size elementSize
+) {
 	using namespace mstd;
 
-	vboCount = attributes.size();
+	attributeOffsets.resize(attributes.size());
 
-	mstd::alloc(vbos, attributes.size());
-
-	glCreateBuffers(attributes.size(), vbos);
+	glCreateVertexArrays(1, &vao);
+	glCreateBuffers(1, &vbo);
 	glCreateBuffers(1, &ebo);
+	
+	Size vertexSize = 0;
+	for (const auto& i : attributes) {
+		vertexSize += i.stride;
+	}
+
+	glNamedBufferStorage(vbo, vertexCount * vertexSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+	glNamedBufferStorage(ebo, elementSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+
 	glCreateVertexArrays(1, &vao);
 
-	glNamedBufferData(vbos[0], 0, nullptr, GL_STREAM_DRAW);
-	glNamedBufferData(ebo, 0, nullptr, GL_STREAM_DRAW);
-
+	GLintptr offset = 0;
 	for (U32 i = 0; i < attributes.size(); ++i) {
+		glVertexArrayVertexBuffer(vao, i, vbo, offset, attributes[i].stride);
 		glEnableVertexArrayAttrib(vao, i);
-		glVertexArrayAttribBinding(vao, i, i);
 		glVertexArrayAttribFormat(
 			vao,
 			i,
@@ -27,10 +37,10 @@ VertexArray::VertexArray(std::vector<VertexArray::Attribute> attributes) {
 			attributes[i].normalized,
 			0L
 		);
-	}
+		glVertexArrayAttribBinding(vao, i, i);
 
-	for (Size i = 0; i < attributes.size(); ++i) {
-		glVertexArrayVertexBuffer(vao, i, vbos[i], 0L, attributes[i].stride);
+		attributeOffsets[i] = offset;
+		offset += attributes[i].stride * vertexCount;
 	}
 
 	glVertexArrayElementBuffer(vao, ebo);

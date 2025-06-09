@@ -7,42 +7,94 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <algorithm>
 #include <GL/glu.h>
 
 using namespace mstd;
 using namespace ct;
 
+static constexpr Vector2f sensitivity(0.15f, 0.15f);
+
+static constexpr F32 maxVelocity = 6.0f;
+static constexpr F32 maxAcceleration = 40.0;
+static constexpr F32 frictionCoefficient = 1.7f;
+
 static void resize(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
 }
 
+static constexpr Matrix4f rotateX(F32 angle) {
+	F32 cosA = std::cos(angle);
+	F32 sinA = std::sin(angle);
+
+	return Matrix4f(
+		{1,  0,    0,     0},
+		{0,  cosA, -sinA, 0},
+		{0,  sinA, cosA,  0},
+		{0,  0,    0,     1}
+	);
+}
+
+static constexpr Matrix4f rotateY(F32 angle) {
+	F32 cosA = std::cos(angle);
+	F32 sinA = std::sin(angle);
+
+	return Matrix4f(
+		{cosA,  0, sinA,  0},
+		{0,     1, 0,     0},
+		{-sinA, 0, cosA,  0},
+		{0,     0, 0,     1}
+	);
+}
+
 int main() {
 	glfwInit();
-	
+
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Cube", monitor, nullptr);
+	if (!window) {
+		std::cerr << errorText << "Could not open a GLFW window" << std::endl;
+		glfwTerminate();
+		return 1;
+	}
 
 	glfwMakeContextCurrent(window);
+
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-		std::cerr << "Failed to initialize GLAD\n" << std::endl;
+		std::cerr << errorText << "Could not initialize GLAD" << std::endl;
+		glfwTerminate();
 		return 1;
 	}
 
 	glfwSetFramebufferSizeCallback(window, resize);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	if (glfwRawMouseMotionSupported()) {
+		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+	}
+
+	glViewport(0, 0, mode->width, mode->height);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glCullFace(GL_BACK);
+	glFrontFace(GL_CCW);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
 
 	Shader::CreateInfo createInfo = {
 		.vertexPath = "resources/shaders/shader.vert",
 		.fragmentPath = "resources/shaders/shader.frag",
 	};
-	Shader shader(createInfo);
 
+	Shader shader(createInfo);
 	shader.use();
 	GLuint objectUniform = glGetUniformLocation(shader, "object");
+	GLuint rotationUniform = glGetUniformLocation(shader, "rotate");
 	GLuint cameraUniform = glGetUniformLocation(shader, "camera");
+	GLuint cameraPositionUniform = glGetUniformLocation(shader, "cameraPosition");
 
 	std::vector<VertexArray::Attribute> vertexAttributes = {
 		{
@@ -56,90 +108,190 @@ int main() {
 			.size = 3,
 			.type = GL_FLOAT,
 			.normalized = GL_FALSE
-		}
+		},
 	};
-	VertexArray vertexArray(vertexAttributes);
 
 	Vector3f vertices[] = {
 		{-1.0f, -1.0f, -1.0f},
 		{1.0f, -1.0f, -1.0f},
 		{1.0f, 1.0f, -1.0f},
-		{-1.0f, 1.0f, -1.0f}
+		{-1.0f, 1.0f, -1.0f},
+
+		{1.0f, -1.0f, 1.0f},
+		{-1.0f, -1.0f, 1.0f},
+		{-1.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f},
+
+		{1.0f, -1.0f, -1.0f},
+		{1.0f, -1.0f, 1.0f},
+		{1.0f, 1.0f, 1.0f},
+		{1.0f, 1.0f, -1.0f},
+
+		{-1.0f, -1.0f, 1.0f},
+		{-1.0f, -1.0f, -1.0f},
+		{-1.0f, 1.0f, -1.0f},
+		{-1.0f, 1.0f, 1.0f},
+
+		{-1.0f, 1.0f, -1.0f},
+		{1.0f, 1.0f, -1.0f},
+		{1.0f, 1.0f, 1.0f},
+		{-1.0f, 1.0f, 1.0f},
+
+		{1.0f, -1.0f, -1.0f},
+		{-1.0f, -1.0f, -1.0f},
+		{-1.0f, -1.0f, 1.0f},
+		{1.0f, -1.0f, 1.0f},
 	};
-	Vector3f colors[] = {
+
+	Vector3f normals[] = {
+		{0.0, 0.0, 1.0},
+		{0.0, 0.0, 1.0},
+		{0.0, 0.0, 1.0},
+		{0.0, 0.0, 1.0},
+
+		{0.0, 0.0, -1.0},
+		{0.0, 0.0, -1.0},
+		{0.0, 0.0, -1.0},
+		{0.0, 0.0, -1.0},
+
 		{1.0, 0.0, 0.0},
+		{1.0, 0.0, 0.0},
+		{1.0, 0.0, 0.0},
+		{1.0, 0.0, 0.0},
+
+		{-1.0, 0.0, 0.0},
+		{-1.0, 0.0, 0.0},
+		{-1.0, 0.0, 0.0},
+		{-1.0, 0.0, 0.0},
+
 		{0.0, 1.0, 0.0},
-		{0.0, 0.0, 1.0}
+		{0.0, 1.0, 0.0},
+		{0.0, 1.0, 0.0},
+		{0.0, 1.0, 0.0},
+
+		{0.0, -1.0, 0.0},
+		{0.0, -1.0, 0.0},
+		{0.0, -1.0, 0.0},
+		{0.0, -1.0, 0.0},
 	};
-	mstd::U16 indices[] = {
-		0, 1, 2
+
+	U16 indices[] = {
+		0, 1, 2,
+		0, 2, 3,
+
+		4, 5, 6,
+		4, 6, 7,
+
+		8, 9, 10,
+		8, 10, 11,
+
+		12, 13, 14,
+		12, 14, 15,
+
+		16, 17, 18,
+		16, 18, 19,
+
+		20, 21, 22,
+		20, 22, 23,
 	};
-	vertexArray.allocateAttributes(0, vertices, 3, GL_STATIC_DRAW);
-	vertexArray.allocateAttributes(1, colors, 3, GL_STATIC_DRAW);
-	vertexArray.allocateElements(indices, 3, GL_STATIC_DRAW);
+	
+	VertexArray vertexArray(vertexAttributes, sizeof(vertices) / sizeof(Vector3f), sizeof(indices));
 
-	bool isFullscreen = true;
-	bool f11Down = false;
+	vertexArray.writeAttributes(0, vertices, sizeof(vertices) / sizeof(Vector3f));
+	vertexArray.writeAttributes(1, normals, sizeof(normals) / sizeof(Vector3f));
+	vertexArray.writeElements(indices, sizeof(indices) / sizeof(U16));
 
-	glViewport(0, 0, mode->width, mode->height);
-	glClearColor(0.0, 0.0, 0.0, 1.0);
+	Vector3f cameraPosition = Vector3f(0.0, 1.545, -2.0);
+	Vector3f cameraVelocity = Vector3f(0.0, 0.0, 0.0);
+	Vector3f cameraAngle = Vector3f(0.0, 0.0, 0.0);
+	F32 airTime = 0.0f;
+	F32 verticalVelocity = 0.0f;
 
-	F32 previousTime = glfwGetTime();
-	F32 deltaTime;
-	while (!glfwWindowShouldClose(window)) {
+	F64 previousTime = glfwGetTime();
+	F32 deltaTime = 0;
+	Vector2d prevMousePosition;
+	glfwGetCursorPos(window, &prevMousePosition.x, &prevMousePosition.y);
+	Vector2d mouseDelta;
+
+	do {
 		glfwPollEvents();
 
-		deltaTime = glfwGetTime() - previousTime;
-		previousTime = glfwGetTime();
+		Vector2d mousePosition;
+		glfwGetCursorPos(window, &mousePosition.x, &mousePosition.y);
+		mouseDelta = mousePosition - prevMousePosition;
+		prevMousePosition = mousePosition;
+		cameraAngle.x += mouseDelta.y * deltaTime * sensitivity.y;
+		cameraAngle.y += mouseDelta.x * deltaTime * sensitivity.x;
 
-		if (glfwGetKey(window, GLFW_KEY_ESCAPE)) {
-			break;
+		cameraAngle.x = std::clamp(cameraAngle.x, -M_PI_2f, M_PI_2f);
+
+		Vector3f cameraAcceleration = Vector3f(0.0);
+		if (glfwGetKey(window, GLFW_KEY_W)) {
+			cameraAcceleration += Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
 		}
 
-		if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS) {
-			if (f11Down == false) {
-				if (isFullscreen) {
-					glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, 0);
-				}
-				else {
-					glfwSetWindowMonitor(window, nullptr, mode->width / 2 - 400, mode->height / 2 - 300, 800, 600, 0);
-				}
+		if (glfwGetKey(window, GLFW_KEY_S)) {
+			cameraAcceleration -= Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
+		}
 
-				isFullscreen = !isFullscreen;
-			}
-			
-			f11Down = true;
+		if (glfwGetKey(window, GLFW_KEY_D)) {
+			cameraAcceleration += Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_A)) {
+			cameraAcceleration -= Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+		}
+
+		if (magnitude(cameraAcceleration) > 1.0f) {
+			cameraAcceleration = normalize(cameraAcceleration);
+		}
+
+		cameraAcceleration *= maxAcceleration;
+
+		Vector3f cameraFriction = normalize(cameraVelocity) * frictionCoefficient * -9.81 * deltaTime;
+		if (magnitude(cameraVelocity) > magnitude(cameraFriction)) {
+			cameraVelocity += cameraFriction;
 		} else {
-			f11Down = false;
+			cameraVelocity = Vector3f(0.0f);
 		}
 
-		Rotorf rotor({1.0, 0.0, 0.0}, {std::cos(previousTime * 0.1f), std::sin(previousTime * 0.1f), 0.0});
-		Matrix3f mat = rotor;
-		Vector3f transformed[sizeof(vertices) / sizeof(Vector3f)];
-		for (U32 i = 0; i < 3; ++i) {
-			transformed[i] = mat * vertices[i];
-
-			colors[i].r = std::cos(i * 2.0 + previousTime);
-			colors[i].g = std::sin(i * 2.0 + previousTime);
-			colors[i].b = -std::cos(i * 2.0 + previousTime);
+		cameraVelocity += cameraAcceleration * deltaTime;
+		if (magnitude(cameraVelocity) > maxVelocity) {
+			cameraVelocity = normalize(cameraVelocity) * maxVelocity;
 		}
 
-		//vertexArray.writeAttributes(0, transformed, 3);
-		vertexArray.writeAttributes(1, colors, 3);
+		cameraPosition += cameraVelocity * deltaTime;
 
-		Matrix4f objectMatrix = translate<F32, 4>(Vector3f(0.0, 0.0, 3.0));
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		Matrix4f rotationMatrix = 
+			rotateX(previousTime);
+	//		* rotateY(previousTime);
+
+		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
+
 		Matrix4f cameraMatrix = 
-			translate<F32, 4>(Vector3f(std::cos(previousTime), 0.0, 0.0))
-			*perspective<F32>(F32(mode->width) / F32(mode->height), M_PI_2, 0.01, 100.0)
-		;
+			perspective(F32(mode->width) / F32(mode->height), M_PI_2f, 0.01f, 100.0f)
+			* rotateX(cameraAngle.x)
+			* rotateY(cameraAngle.y)
+			* translate(-cameraPosition);
 
-		glClear(GL_COLOR_BUFFER_BIT);
+
 		shader.use();
+
 		glUniformMatrix4fv(objectUniform, 1, GL_FALSE, (GLfloat*)&objectMatrix);
-		glUniformMatrix4fv(cameraUniform, 1, GL_TRUE, (GLfloat*)&cameraMatrix);
-		vertexArray.draw<mstd::U16>(3L, 0L);
+		glUniformMatrix4fv(rotationUniform, 1, GL_FALSE, (GLfloat*)&rotationMatrix);
+		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
+		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&cameraPosition);
+
+		vertexArray.draw<U16>(sizeof(indices) / sizeof(U16), 0);
+
 		glfwSwapBuffers(window);
-	}
+
+		F64 time = glfwGetTime();
+		deltaTime = time - previousTime;
+		previousTime = time;
+	} while (!glfwWindowShouldClose(window));
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
