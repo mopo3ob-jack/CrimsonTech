@@ -112,15 +112,15 @@ int main() {
 	};
 
 	Vector3f vertices[] = {
-		{-1.0f, -1.0f, -1.0f},
-		{1.0f, -1.0f, -1.0f},
-		{1.0f, 1.0f, -1.0f},
-		{-1.0f, 1.0f, -1.0f},
-
 		{1.0f, -1.0f, 1.0f},
 		{-1.0f, -1.0f, 1.0f},
 		{-1.0f, 1.0f, 1.0f},
 		{1.0f, 1.0f, 1.0f},
+
+		{-1.0f, -1.0f, -1.0f},
+		{1.0f, -1.0f, -1.0f},
+		{1.0f, 1.0f, -1.0f},
+		{-1.0f, 1.0f, -1.0f},
 
 		{1.0f, -1.0f, -1.0f},
 		{1.0f, -1.0f, 1.0f},
@@ -195,10 +195,13 @@ int main() {
 		20, 22, 23,
 	};
 	
-	VertexArray vertexArray(vertexAttributes, sizeof(vertices) / sizeof(Vector3f), sizeof(indices));
+	VertexArray vertexArray;
 
+	vertexArray.allocateAttributes(vertexAttributes, sizeof(vertices) / sizeof(Vector3f));
 	vertexArray.writeAttributes(0, vertices, sizeof(vertices) / sizeof(Vector3f));
 	vertexArray.writeAttributes(1, normals, sizeof(normals) / sizeof(Vector3f));
+
+	vertexArray.allocateElements(sizeof(indices));
 	vertexArray.writeElements(indices, sizeof(indices) / sizeof(U16));
 
 	Vector3f cameraPosition = Vector3f(0.0, 1.545, -2.0);
@@ -265,8 +268,8 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		Matrix4f rotationMatrix = 
-			rotateX(previousTime);
-	//		* rotateY(previousTime);
+			rotateX(previousTime)
+			* rotateY(previousTime);
 
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 

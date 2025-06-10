@@ -16,8 +16,8 @@ vec3 lightColor = vec3(1.0f);
 vec3 lightPosition = vec3(0.0, 1.0, 2.0);
 
 void main() {
-	vec3 lightDirection = normalize(f_position - lightPosition);
-	vec3 viewDirection = normalize(cameraPosition - f_position);
+	vec3 lightDirection = normalize(lightPosition - f_position);
+	vec3 viewDirection = normalize(f_position - cameraPosition);
 	vec3 reflectDirection = reflect(lightDirection, f_normal);
 
 	float light = ambient;

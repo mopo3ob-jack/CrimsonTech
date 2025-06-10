@@ -17,9 +17,7 @@ public:
 		GLboolean normalized;
 	};
 
-	VertexArray() {}
-
-	VertexArray(const std::vector<Attribute>& attributes, mstd::Size vertexCount, mstd::Size elementSize);
+	VertexArray();
 
 	VertexArray(VertexArray& vertexArray) = delete;
 	VertexArray& operator=(VertexArray& vertexArray) = delete;
@@ -46,6 +44,10 @@ public:
 			vao = 0;
 		}
 	}
+
+	void allocateAttributes(const std::vector<Attribute>& attributes, mstd::Size vertexCount);
+
+	void allocateElements(mstd::Size bufferSize);
 
 	template <typename T>
 	void writeAttributes(mstd::Size attribute, T* data, GLsizeiptr count, GLintptr offset = 0L) {
