@@ -23,7 +23,7 @@ static void resize(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
 }
 
-static constexpr Matrix4f rotateX(F32 angle) {
+static Matrix4f rotateX(F32 angle) {
 	F32 cosA = std::cos(angle);
 	F32 sinA = std::sin(angle);
 
@@ -35,7 +35,7 @@ static constexpr Matrix4f rotateX(F32 angle) {
 	);
 }
 
-static constexpr Matrix4f rotateY(F32 angle) {
+static Matrix4f rotateY(F32 angle) {
 	F32 cosA = std::cos(angle);
 	F32 sinA = std::sin(angle);
 
@@ -226,7 +226,7 @@ int main() {
 		cameraAngle.x += mouseDelta.y * deltaTime * sensitivity.y;
 		cameraAngle.y += mouseDelta.x * deltaTime * sensitivity.x;
 
-		cameraAngle.x = std::clamp(cameraAngle.x, -M_PI_2f, M_PI_2f);
+		cameraAngle.x = std::clamp(cameraAngle.x, F32(- M_PI_2), F32(M_PI_2));
 
 		Vector3f cameraAcceleration = Vector3f(0.0);
 		if (glfwGetKey(window, GLFW_KEY_W)) {
@@ -274,7 +274,7 @@ int main() {
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 
 		Matrix4f cameraMatrix = 
-			perspective(F32(mode->width) / F32(mode->height), M_PI_2f, 0.01f, 100.0f)
+			perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f)
 			* rotateX(cameraAngle.x)
 			* rotateY(cameraAngle.y)
 			* translate(-cameraPosition);

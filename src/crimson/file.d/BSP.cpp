@@ -150,8 +150,8 @@ static mstd::U32 bestTriangle(
 ) {
 	using namespace mstd;
 
-	U32 leastSplits = std::numeric_limits<U32>::max();
-	U32 lowestBalance = std::numeric_limits<U32>::max();
+	U32 leastSplits = -1;
+	U32 lowestBalance = -1;
 	U32 bestTriangle;
 	for (Size i = 0; i < triangles.size(); ++i) {
 		U32 balance;
@@ -201,7 +201,7 @@ static mstd::U8 splitTriangle(
 		if (plane.intersect(*prev, *curr, split)) {
 			frontVertices[frontCount] = arena.append(1, &split);
 			backVertices[backCount] = frontVertices[frontCount];
-			vertices = std::span(vertices.begin().base(), frontVertices[frontCount]);
+			vertices = std::span(&*vertices.begin(), frontVertices[frontCount]);
 			++frontCount;
 			++backCount;
 		}
