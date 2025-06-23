@@ -10,8 +10,6 @@ include(GNUInstallDirs)
 include(FetchContent)
 include(FindOpenGL)
 
-add_compile_definitions(_USE_MATH_DEFINES)
-
 FetchContent_Declare(
 	mstd
 	GIT_REPOSITORY https://github.com/mopo3ob-jack/mstd.git
@@ -34,6 +32,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "inc" "*.hpp" "*.h")
 
 add_library(crimson)
+target_compile_definitions(crimson PUBLIC _USE_MATH_DEFINES)
 target_include_directories(crimson PUBLIC inc/ ${INSTALL_LOCATION}/include)
 target_link_directories(crimson PUBLIC ${INSTALL_LOCATION}/lib)
 target_link_libraries(crimson PUBLIC mstd glfw OpenGL::GL OpenGL::GLU assimp)
