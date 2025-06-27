@@ -82,8 +82,10 @@ int main() {
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	glCullFace(GL_BACK);
 	glFrontFace(GL_CCW);
-	glEnable(GL_CULL_FACE);
+	//glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
 	Shader::CreateInfo createInfo = {
 		.vertexPath = "resources/shaders/shader.vert",
@@ -100,6 +102,8 @@ int main() {
 
 	BSP bsp;
 	bsp.build("resources/models/room.fbx");
+	std::cout << std::endl;
+	bsp.print();
 
 	std::vector<VertexArray::Attribute> vertexAttributes = {
 		{
@@ -221,6 +225,7 @@ int main() {
 	glfwGetCursorPos(window, &prevMousePosition.x, &prevMousePosition.y);
 	Vector2d mouseDelta;
 
+	U32 hit = 0;
 	do {
 		glfwPollEvents();
 
@@ -301,15 +306,16 @@ int main() {
 		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
 		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&cameraPosition);
 
-		glUniform1i(wireframeUniform, 0);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		bsp.vertexArray.draw<U32>(24 * 3, 0);
-
 		glUniform1i(wireframeUniform, 1);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		bsp.vertexArray.draw<U32>(24 * 3, 0);
+		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
 
 		glfwSwapBuffers(window);
+
+		if (bsp.colliding(cameraPosition)) {
+			std::cout << hit << std::endl;
+			++hit;
+		}
 
 		F64 time = glfwGetTime();
 		deltaTime = time - previousTime;

@@ -2,6 +2,7 @@
 #define CT_PLANE_HPP
 
 #include <mstd/geometry>
+#include <iostream>
 
 namespace ct {
 

@@ -7,19 +7,20 @@
 #include <mstd/misc>
 #include <array>
 #include <span>
+#include <optional>
 
 #include <cassert>
 
 namespace ct {
 
-using Triangle = std::array<mstd::U32, 3>;
+struct Face : Plane {
+	mstd::Vector3f vertices[3];
+};
 
 static mstd::Status import(
 	const std::string& path,
 	mstd::Arena& arena,
-	std::span<mstd::Vector3f>& vertices,
-	std::span<mstd::Vector3f>& normals,
-	std::span<Triangle>& triangles
+	std::span<Face>& faces
 ) {
 	using namespace mstd;
 
@@ -40,68 +41,33 @@ static mstd::Status import(
 		return 1;
 	}
 
-	Vector3f* nStart = arena.tell<Vector3f>();
+	Face* start = arena.tell<Face>();
 	for (Size m = 0; m < scene->mNumMeshes; ++m) {
 		aiMesh* mesh = scene->mMeshes[m];
-		arena.append(mesh->mNumVertices, mesh->mNormals);
-	}
-
-	Triangle* tStart = arena.tell<Triangle>();
-	U32 vCount = 0;
-	U32 tCount = 0;
-	for (Size m = 0; m < scene->mNumMeshes; ++m) {
-		aiMesh* mesh = scene->mMeshes[m];
-
 		for (Size f = 0; f < mesh->mNumFaces; ++f) {
 			aiFace face = mesh->mFaces[f];
-
-			Triangle result = {
-				face.mIndices[0] + vCount,
-				face.mIndices[1] + vCount,
-				face.mIndices[2] + vCount,
+			
+			Face result = {
+				.vertices = {
+					*(Vector3f*)&mesh->mVertices[face.mIndices[0]],
+					*(Vector3f*)&mesh->mVertices[face.mIndices[1]],
+					*(Vector3f*)&mesh->mVertices[face.mIndices[2]],
+				},
 			};
-			arena.append<Triangle>(1, &result);
+			result.normal = *(Vector3f*)&mesh->mNormals[face.mIndices[0]];
+			result.d = dot(result.normal, result.vertices[0]);
+
+			arena.append(1, &result);
 		}
-		tCount += mesh->mNumFaces;
-
-		vCount += mesh->mNumVertices;
 	}
 
-	Vector3f* vStart = arena.tell<Vector3f>();
-	for (Size m = 0; m < scene->mNumMeshes; ++m) {
-		aiMesh* mesh = scene->mMeshes[m];
-		arena.append(mesh->mNumVertices, mesh->mVertices);
-	}
-
-	normals = std::span(nStart, vCount);
-	triangles = std::span(tStart, tCount);
-	vertices = std::span(vStart, vCount);
+	faces = std::span(start, arena.tell<Face>());
 
 	return 0;
 }
 
-static void constructPlanes(
-	mstd::Arena& arena,
-	const std::span<mstd::Vector3f>& vertices,
-	const std::span<mstd::Vector3f>& normals,
-	const std::span<Triangle>& triangles,
-	std::span<Plane>& planes
-) {
-	using namespace mstd;
-
-	planes = std::span(arena.reserve<Plane>(triangles.size()), triangles.size());
-
-	for (Size i = 0; i < planes.size(); ++i) {
-		Vector3f a = vertices[triangles[i][0]];
-
-		planes[i].normal = normals[triangles[i][0]];
-		planes[i].d = dot(planes[i].normal, a);
-	}
-}
-
 static mstd::U32 countSplits(
-	const std::span<mstd::Vector3f>& vertices,
-	const std::span<Triangle>& triangles,
+	const std::span<Face>& faces,
 	Plane plane,
 	mstd::U32& balance
 ) {
@@ -110,10 +76,10 @@ static mstd::U32 countSplits(
 	I64 signedBalance = 0;
 	
 	U32 splits = 0;
-	for (const auto& t : triangles) {
+	for (const auto& f : faces) {
 		I8 status = 0;
 		for (U32 i = 0; i < 3; ++i) {
-			F32 d = plane.distance(vertices[t[0]]);
+			F32 d = plane.distance(f.vertices[i]);
 			if (d > 0.0f) {
 				if (status == -1) {
 					status = 0;
@@ -143,26 +109,18 @@ static mstd::U32 countSplits(
 	return splits;
 }
 
-static mstd::U32 bestTriangle(
-	const std::span<mstd::Vector3f>& vertices,
-	const std::span<Triangle>& triangles,
-	const std::span<Plane>& planes
-) {
+static mstd::U32 bestTriangle(const std::span<Face>& faces) {
 	using namespace mstd;
 
-	U32 leastSplits = -1;
-	U32 lowestBalance = -1;
-	U32 bestTriangle;
-	for (Size i = 0; i < triangles.size(); ++i) {
+	U32 lowestScore = -1;
+	U32 bestTriangle = 0;
+	for (Size i = 0; i < faces.size(); ++i) {
 		U32 balance;
-		U32 splits = countSplits(vertices, triangles, planes[i], balance);
+		U32 splits = countSplits(faces, faces[i], balance);
+		U32 score = balance + splits;
 
-		if (splits < leastSplits) {
-			leastSplits = splits;
-			lowestBalance = balance;
-			bestTriangle = i;
-		} else if (splits == leastSplits && balance < lowestBalance) {
-			lowestBalance = balance;
+		if (score < lowestScore) {
+			lowestScore = score;
 			bestTriangle = i;
 		}
 	}
@@ -170,129 +128,278 @@ static mstd::U32 bestTriangle(
 	return bestTriangle;
 }
 
-static mstd::U8 splitTriangle(
-	mstd::Arena& arena,
-	const Plane& plane,
-	std::span<mstd::Vector3f>& vertices,
-	Triangle triangles[4]
-) {
+static mstd::Bool splitTriangle(const Plane& plane, const Face& face, std::optional<Face> result[4]) {
 	using namespace mstd;
 
-	Vector3f* frontVertices[4];
-	Vector3f* backVertices[4];
+	Vector3f frontVertices[4];
+	Vector3f backVertices[4];
 	U8 frontCount = 0;
 	U8 backCount = 0;
+	U8 zeroVerts = 0;
 	
-	Vector3f* prev = vertices.data() + triangles[0][2];
-	Vector3f* curr;
+	const Vector3f* prev = face.vertices + 2;
+	const Vector3f* curr;
 	for (Size i = 0; i < 3; ++i) {
-		curr = vertices.data() + triangles[0][i];
+		curr = face.vertices + i;
 		F32 prevDistance = plane.distance(*prev);
 		if (prevDistance > 0.0f) {
-			frontVertices[frontCount++] = prev;
+			frontVertices[frontCount++] = *prev;
 		} else if (prevDistance < 0.0f) {
-			backVertices[backCount++] = prev;
+			backVertices[backCount++] = *prev;
 		} else {
-			frontVertices[frontCount++] = prev;
-			backVertices[backCount++] = prev;
+			frontVertices[frontCount++] = *prev;
+			backVertices[backCount++] = *prev;
+			++zeroVerts;
 		}
 
 		Vector3f split;
 		if (plane.intersect(*prev, *curr, split)) {
-			frontVertices[frontCount] = arena.append(1, &split);
-			backVertices[backCount] = frontVertices[frontCount];
-			vertices = std::span(&*vertices.begin(), frontVertices[frontCount]);
-			++frontCount;
-			++backCount;
+			frontVertices[frontCount++] = split;
+			backVertices[backCount++] = split;
 		}
 
 		prev = curr;
 	}
 
-	U8 validTriangles = 0;
+	// Coplaner
+	if (zeroVerts == 3) {
+		return true;
+	}
 
 	if (frontCount == 3) {
-		triangles[0] = {
-			U32((Size)frontVertices[0] - (Size)vertices.data()),
-			U32((Size)frontVertices[1] - (Size)vertices.data()),
-			U32((Size)frontVertices[2] - (Size)vertices.data()),
+		result[0] = {
+			.vertices = {
+				frontVertices[0],
+				frontVertices[1],
+				frontVertices[2]
+			},
 		};
-		validTriangles |= 0b1;
+		result[0]->normal = face.normal;
+		result[0]->d = face.d;
 	} else if (frontCount == 4) {
-		triangles[0] = {
-			U32((Size)frontVertices[0] - (Size)vertices.data()),
-			U32((Size)frontVertices[1] - (Size)vertices.data()),
-			U32((Size)frontVertices[2] - (Size)vertices.data()),
+		result[0] = {
+			.vertices = {
+				frontVertices[0],
+				frontVertices[1],
+				frontVertices[2]
+			}
 		};
-		triangles[1] = {
-			U32((Size)frontVertices[0] - (Size)vertices.data()),
-			U32((Size)frontVertices[2] - (Size)vertices.data()),
-			U32((Size)frontVertices[3] - (Size)vertices.data()),
+		result[1] = {
+			.vertices = {
+				frontVertices[0],
+				frontVertices[2],
+				frontVertices[3]
+			}
 		};
-		validTriangles |= 0b11;
+		result[0]->normal = face.normal;
+		result[0]->d = face.d;
+		result[1]->normal = face.normal;
+		result[1]->d = face.d;
 	}
 
 	if (backCount == 3) {
-		triangles[2] = {
-			U32((Size)backVertices[0] - (Size)vertices.data()),
-			U32((Size)backVertices[1] - (Size)vertices.data()),
-			U32((Size)backVertices[2] - (Size)vertices.data()),
+		result[2] = {
+			.vertices = {
+				backVertices[0],
+				backVertices[1],
+				backVertices[2]
+			}
 		};
-		validTriangles |= 0b100;
-	} else if (frontCount == 4) {
-		triangles[2] = {
-			U32((Size)backVertices[0] - (Size)vertices.data()),
-			U32((Size)backVertices[1] - (Size)vertices.data()),
-			U32((Size)backVertices[2] - (Size)vertices.data()),
+		result[2]->normal = face.normal;
+		result[2]->d = face.d;
+	} else if (backCount == 4) {
+		result[2] = {
+			.vertices = {
+				backVertices[0],
+				backVertices[1],
+				backVertices[2]
+			}
 		};
-		triangles[3] = {
-			U32((Size)backVertices[0] - (Size)vertices.data()),
-			U32((Size)backVertices[2] - (Size)vertices.data()),
-			U32((Size)backVertices[3] - (Size)vertices.data()),
+		result[3] = {
+			.vertices = {
+				backVertices[0],
+				backVertices[2],
+				backVertices[3]
+			}
 		};
-		validTriangles |= 0b1100;
+		result[2]->normal = face.normal;
+		result[2]->d = face.d;
+		result[3]->normal = face.normal;
+		result[3]->d = face.d;
 	}
 
-	return validTriangles;
+	return false;
 }
 
 struct BSPNode {
-	Plane p;
+	Face split;
+	std::span<Face> faces;
 };
 
-static mstd::Tree<BSPNode, 2> partition(
-	mstd::Arena& bspArena,
-	mstd::Arena& geometryArena,
-	std::span<mstd::Vector3f>& vertices,
-	std::span<mstd::Vector3f>& normals,
-	std::span<Triangle>& triangles
+static void partition(
+	mstd::Arena& arena,
+	mstd::Arena& frontArena,
+	mstd::Arena& backArena,
+	mstd::Tree<BSPNode, 2>& node,
+	mstd::U32 pad
 ) {
 	using namespace mstd;
 
-	std::span<Plane> planes;
-	constructPlanes(geometryArena, vertices, normals, triangles, planes);
+	BSPNode& b = node.value;
 
-	for (Size i = 0; i < triangles.size(); ++i) {
-		Triangle result[4];
-		result[0] = triangles[i];
-		U8 validTriangles = splitTriangle(geometryArena, planes[0], vertices, result);
-
-		
+	if (b.faces.empty()) {
+		return;
 	}
 
-	return {};
+	U32 faceIndex = bestTriangle(b.faces);
+	b.split = b.faces[faceIndex];
+
+	for (Size i = 0; i < pad; ++i) {
+		std::cout << "|";
+	}
+	std::cout << "\e[33m" << std::string(b.split.normal) << ", " << b.split.d << "\e[0m" << std::endl;
+
+	auto printPlane = [pad](Plane p, const char* pre) {
+		for (Size j = 0; j < pad; ++j) {
+			std::cout << "|";
+		}
+		std::cout << pre <<  std::string(p.normal) << ", " << p.d << "\e[0m" << std::endl;
+	};
+	
+	for (Size i = 0; i < b.faces.size(); ++i) {
+		printPlane(b.faces[i], " \e[37m");
+	}
+
+	std::cout << std::endl;
+	
+	Face* frontStart = frontArena.tell<Face>();
+	Face* backStart = backArena.tell<Face>();
+	Size frontCount = 0;
+	Size backCount = 0;
+	for (Size i = 0; i < b.faces.size(); ++i) {
+		std::optional<Face> result[4] = { std::nullopt };
+		if (splitTriangle(b.split, b.faces[i], result)) {
+			continue;
+		}
+		// TODO Nest ifs
+		if (result[0].has_value()) {
+			Face f = result[0].value();
+			frontArena.append<Face>(1, &f);
+			++frontCount;
+			printPlane(f, " \e[32m");
+		}
+		if (result[1].has_value()) {
+			Face f = result[1].value();
+			frontArena.append(1, &f);
+			++frontCount;
+			printPlane(f, " \e[32m");
+		}
+		if (result[2].has_value()) {
+			Face f = result[2].value();
+			backArena.append(1, &f);
+			++backCount;
+			printPlane(f, " \e[31m");
+		}
+		if (result[3].has_value()) {
+			Face f = result[3].value();
+			backArena.append(1, &f);
+			++backCount;
+			printPlane(f, " \e[31m");
+		}
+	}
+
+	std::span<Face> frontFaces = std::span(frontStart, frontCount);
+	std::span<Face> backFaces = std::span(backStart, backCount);
+
+	node.addChildren(arena);
+	node[0].value.faces = frontFaces;
+	partition(arena, frontArena, backArena, node[0], pad + 1);
+
+	node[1].value.faces = backFaces;
+	partition(arena, frontArena, backArena, node[1], pad + 1);
+
+	frontArena.truncate(frontFaces.data());
+	backArena.truncate(backFaces.data());
+}
+
+static mstd::Tree<Plane, 2> convert(mstd::Arena& arena, const mstd::Tree<BSPNode, 2>& b) {
+	using namespace mstd;
+
+	Tree<Plane, 2> result;
+
+	result.value = b.value.split;
+
+	if (b.data()) {
+		result.addChildren(arena);
+		result[0] = convert(arena, b[0]);
+		result[1] = convert(arena, b[1]);
+	}
+
+	return std::move(result);
+}
+
+static void optimizeTopology(
+	const std::span<Face>& faces,
+	std::vector<mstd::Vector3f>& vertices,
+	std::vector<mstd::Vector3f>& normals,
+	std::vector<mstd::U32>& indices
+) {
+	using namespace mstd;
+
+	vertices.reserve(faces.size() * 3);
+	normals.reserve(faces.size() * 3);
+	indices.reserve(faces.size() * 3);
+	for (const auto& f : faces) {
+		std::optional<U32> triangle[3] = {std::nullopt};
+		for (Size i = 0; i < vertices.size(); ++i) {
+			if (f.normal != normals[i]) {
+				continue;
+			}
+			for (Size j = 0; j < 3; ++j) {
+				if (triangle[j]) {
+					continue;
+				}
+				if (vertices[i] == f.vertices[j]) {
+					triangle[j] = i;
+				}
+			}
+		}
+
+		for (Size j = 0; j < 3; ++j) {
+			if (triangle[j].has_value()) {
+				indices.push_back(triangle[j].value());
+			} else {
+				indices.push_back(vertices.size());
+				vertices.push_back(f.vertices[j]);
+				normals.push_back(f.normal);
+			}
+		}
+	}
 }
 
 void BSP::build(const std::string& path) {
 	using namespace mstd;
 
-	Arena geometryArena(1L << 24);
 	Arena bspArena(1L << 24);
 
-	std::span<Vector3f> vertices;
-	std::span<Vector3f> normals;
-	std::span<Triangle> triangles;
-	if (import(path, geometryArena, vertices, normals, triangles)) return;
+	std::span<Face> faces;
+
+	if (import(path, bspArena, faces)) return;
+
+	Arena frontArena(faces.size_bytes() * 16);
+	Arena backArena(faces.size_bytes() * 16);
+
+	Tree<BSPNode, 2> b;
+	b.value.faces = faces;
+	partition(bspArena, frontArena, backArena, b, 0);
+	rootSplit = convert(arena, b);
+
+	bspArena.truncate(faces.data() + faces.size());
+
+	std::vector<Vector3f> vertices;
+	std::vector<Vector3f> normals;
+	std::vector<U32> indices;
+	optimizeTopology(faces, vertices, normals, indices);
 
 	std::vector<VertexArray::Attribute> attributes = {
 		{
@@ -313,10 +420,58 @@ void BSP::build(const std::string& path) {
 	vertexArray.writeAttributes(0, vertices.data(), vertices.size());
 	vertexArray.writeAttributes(1, normals.data(), normals.size());
 
-	vertexArray.allocateElements(triangles.size_bytes());
-	vertexArray.writeElements((U32*)triangles.data(), triangles.size() * 3);
+	indexCount = indices.size();
+	vertexArray.allocateElements(indices.size() * sizeof(U32));
+	vertexArray.writeElements(indices.data(), indices.size());
+}
 
-	partition(bspArena, geometryArena, vertices, normals, triangles);
+mstd::Bool findNode(const mstd::Tree<Plane, 2>& b, const mstd::Vector3f& p) {
+	if (b.value.distance(p) >= 0.0f) {
+		if (b[0].data()) {
+			return findNode(b[0], p);
+		}
+
+		return false;
+	} else {
+		if (b[1].data()) {
+			return findNode(b[1], p);
+		}
+
+		return true;
+	}
+}
+
+mstd::Bool BSP::colliding(const mstd::Vector3f& point) const {
+	return findNode(rootSplit, point);
+}
+
+void printNode(const mstd::Tree<Plane, 2>& b, mstd::U32 pad) {
+	using namespace mstd;
+
+	for (U32 i = 0; i < pad; ++i) {
+		U32 color = (i % 7) + 31;
+		std::string escapeCode;
+		escapeCode = "\e[";
+		escapeCode += std::to_string(color);
+		escapeCode += "m";
+		std::cout << escapeCode << '|';
+	}
+
+	U32 color = (pad % 7) + 31;
+	std::string escapeCode;
+	escapeCode = "\e[";
+	escapeCode += std::to_string(color);
+	escapeCode += "m";
+	std::cout << escapeCode << std::string(b.value.normal) << ", " << b.value.d << std::endl;
+
+	if (b.data()) {
+		printNode(b[0], pad + 1);
+		printNode(b[1], pad + 1);
+	}
+}
+
+void BSP::print() const {
+	printNode(rootSplit, 0);
 }
 
 }

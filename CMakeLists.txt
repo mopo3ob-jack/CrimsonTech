@@ -42,9 +42,6 @@ add_subdirectory(src/glad)
 add_subdirectory(src/crimson/renderer.d)
 add_subdirectory(src/crimson/file.d)
 
-get_target_property(_glfw_inc glfw INTERFACE_INCLUDE_DIRECTORIES)
-message("GLFW include dirs: ${_glfw_inc}")
-
 set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build tiling test programs")
 if (${CRIMSON_BUILD_TESTS})
 	add_subdirectory("tests/cube")
