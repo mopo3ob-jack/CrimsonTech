@@ -19,8 +19,11 @@ static constexpr F32 maxVelocity = 6.0f;
 static constexpr F32 maxAcceleration = 40.0;
 static constexpr F32 frictionCoefficient = 1.7f;
 
+static Matrix4f projectionMatrix;
+
 static void resize(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
+	projectionMatrix = perspective(F32(width) / F32(height), F32(M_PI_2), 0.01f, 100.0f);
 }
 
 static Matrix4f rotateX(F32 angle) {
@@ -63,6 +66,8 @@ int main() {
 		return 1;
 	}
 
+	projectionMatrix = perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f);
+
 	glfwMakeContextCurrent(window);
 
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -71,7 +76,7 @@ int main() {
 		return 1;
 	}
 
-	glfwSetFramebufferSizeCallback(window, resize);
+	glfwSetWindowSizeCallback(window, resize);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	if (glfwRawMouseMotionSupported()) {
 		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
@@ -274,7 +279,7 @@ int main() {
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 
 		Matrix4f cameraMatrix = 
-			perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f)
+			projectionMatrix
 			* rotateX(cameraAngle.x)
 			* rotateY(cameraAngle.y)
 			* translate(-cameraPosition);

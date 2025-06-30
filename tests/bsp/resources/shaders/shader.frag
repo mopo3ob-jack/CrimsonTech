@@ -6,7 +6,6 @@ in vec3 f_normal;
 out vec4 fragColor;
 
 uniform vec3 cameraPosition;
-uniform int wireframe;
 
 float ambient = 0.3f;
 float diffuse = 0.5f;
@@ -17,10 +16,7 @@ vec3 lightColor = vec3(0.0f, 1.0f, 0.0f);
 vec3 lightPosition = vec3(0.0, 1.0, -1.0);
 
 void main() {
-	if (wireframe == 1) {
-		fragColor = vec4(f_position, 1.0f);
-		return;
-	}
+	lightColor = abs(f_normal);
 
 	vec3 lightDirection = normalize(lightPosition - f_position);
 	vec3 viewDirection = normalize(f_position - cameraPosition);
@@ -30,5 +26,5 @@ void main() {
 	light += diffuse * max(dot(f_normal, lightDirection), 0.0f);
 	light += specular * pow(max(dot(viewDirection, reflectDirection), 0.0f), 32.0f);
 
-	fragColor = vec4(lightColor, 0.3);
+	fragColor = vec4(lightColor * light, 1.0);
 }

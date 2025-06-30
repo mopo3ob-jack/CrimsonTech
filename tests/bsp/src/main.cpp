@@ -20,8 +20,11 @@ static constexpr F32 maxVelocity = 6.0f;
 static constexpr F32 maxAcceleration = 40.0;
 static constexpr F32 frictionCoefficient = 1.7f;
 
+static Matrix4f projectionMatrix;
+
 static void resize(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
+	projectionMatrix = perspective(F32(width) / F32(height), F32(M_PI_2), 0.01f, 100.0f);
 }
 
 static Matrix4f rotateX(F32 angle) {
@@ -72,6 +75,8 @@ int main() {
 		return 1;
 	}
 
+	projectionMatrix = perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f);
+
 	glfwSetFramebufferSizeCallback(window, resize);
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	if (glfwRawMouseMotionSupported()) {
@@ -82,9 +87,9 @@ int main() {
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	glCullFace(GL_BACK);
 	glFrontFace(GL_CCW);
-	//glEnable(GL_CULL_FACE);
+	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	//glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
 
 	Shader::CreateInfo createInfo = {
@@ -98,11 +103,9 @@ int main() {
 	GLuint rotationUniform = glGetUniformLocation(shader, "rotate");
 	GLuint cameraUniform = glGetUniformLocation(shader, "camera");
 	GLuint cameraPositionUniform = glGetUniformLocation(shader, "cameraPosition");
-	GLuint wireframeUniform = glGetUniformLocation(shader, "wireframe");
 
 	BSP bsp;
 	bsp.build("resources/models/room.fbx");
-	std::cout << std::endl;
 	bsp.print();
 
 	std::vector<VertexArray::Attribute> vertexAttributes = {
@@ -225,7 +228,6 @@ int main() {
 	glfwGetCursorPos(window, &prevMousePosition.x, &prevMousePosition.y);
 	Vector2d mouseDelta;
 
-	U32 hit = 0;
 	do {
 		glfwPollEvents();
 
@@ -284,7 +286,7 @@ int main() {
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 
 		Matrix4f cameraMatrix = 
-			perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f)
+			projectionMatrix
 			* rotateX(cameraAngle.x)
 			* rotateY(cameraAngle.y)
 			* translate(-cameraPosition);
@@ -306,16 +308,9 @@ int main() {
 		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
 		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&cameraPosition);
 
-		glUniform1i(wireframeUniform, 1);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
 
 		glfwSwapBuffers(window);
-
-		if (bsp.colliding(cameraPosition)) {
-			std::cout << hit << std::endl;
-			++hit;
-		}
 
 		F64 time = glfwGetTime();
 		deltaTime = time - previousTime;

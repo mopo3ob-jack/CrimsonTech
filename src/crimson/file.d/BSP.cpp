@@ -231,111 +231,68 @@ static mstd::Bool splitTriangle(const Plane& plane, const Face& face, std::optio
 	return false;
 }
 
-struct BSPNode {
-	Face split;
-	std::span<Face> faces;
-};
-
 static void partition(
 	mstd::Arena& arena,
 	mstd::Arena& frontArena,
 	mstd::Arena& backArena,
-	mstd::Tree<BSPNode, 2>& node,
-	mstd::U32 pad
+	const std::span<Face>& faces,
+	mstd::Tree<Plane, 2>& node
 ) {
 	using namespace mstd;
 
-	BSPNode& b = node.value;
-
-	if (b.faces.empty()) {
+	if (faces.empty()) {
 		return;
 	}
 
-	U32 faceIndex = bestTriangle(b.faces);
-	b.split = b.faces[faceIndex];
-
-	for (Size i = 0; i < pad; ++i) {
-		std::cout << "|";
-	}
-	std::cout << "\e[33m" << std::string(b.split.normal) << ", " << b.split.d << "\e[0m" << std::endl;
-
-	auto printPlane = [pad](Plane p, const char* pre) {
-		for (Size j = 0; j < pad; ++j) {
-			std::cout << "|";
-		}
-		std::cout << pre <<  std::string(p.normal) << ", " << p.d << "\e[0m" << std::endl;
-	};
-	
-	for (Size i = 0; i < b.faces.size(); ++i) {
-		printPlane(b.faces[i], " \e[37m");
-	}
-
-	std::cout << std::endl;
+	U32 faceIndex = bestTriangle(faces);
+	node.value = faces[faceIndex];
 	
 	Face* frontStart = frontArena.tell<Face>();
 	Face* backStart = backArena.tell<Face>();
-	Size frontCount = 0;
-	Size backCount = 0;
-	for (Size i = 0; i < b.faces.size(); ++i) {
+	for (Size i = 0; i < faces.size(); ++i) {
 		std::optional<Face> result[4] = { std::nullopt };
-		if (splitTriangle(b.split, b.faces[i], result)) {
+		if (splitTriangle(node.value, faces[i], result)) {
 			continue;
 		}
-		// TODO Nest ifs
+
 		if (result[0].has_value()) {
-			Face f = result[0].value();
+			Face& f = result[0].value();
 			frontArena.append<Face>(1, &f);
-			++frontCount;
-			printPlane(f, " \e[32m");
+			if (result[1].has_value()) {
+				f = result[1].value();
+				frontArena.append(1, &f);
+			}
 		}
-		if (result[1].has_value()) {
-			Face f = result[1].value();
-			frontArena.append(1, &f);
-			++frontCount;
-			printPlane(f, " \e[32m");
-		}
+
 		if (result[2].has_value()) {
-			Face f = result[2].value();
+			Face& f = result[2].value();
 			backArena.append(1, &f);
-			++backCount;
-			printPlane(f, " \e[31m");
-		}
-		if (result[3].has_value()) {
-			Face f = result[3].value();
-			backArena.append(1, &f);
-			++backCount;
-			printPlane(f, " \e[31m");
+			if (result[3].has_value()) {
+				f = result[3].value();
+				backArena.append(1, &f);
+			}
 		}
 	}
 
-	std::span<Face> frontFaces = std::span(frontStart, frontCount);
-	std::span<Face> backFaces = std::span(backStart, backCount);
+	std::span<Face> frontFaces = std::span(frontStart, frontArena.tell<Face>());
+	std::span<Face> backFaces = std::span(backStart, backArena.tell<Face>());
 
-	node.addChildren(arena);
-	node[0].value.faces = frontFaces;
-	partition(arena, frontArena, backArena, node[0], pad + 1);
+	if (frontFaces.size()) {
+		node[0] = arena.reserve<mstd::Tree<Plane, 2>>(1);
+		partition(arena, frontArena, backArena, frontFaces, *node[0]);
+	} else {
+		node[0] = nullptr;
+	}
 
-	node[1].value.faces = backFaces;
-	partition(arena, frontArena, backArena, node[1], pad + 1);
+	if (backFaces.size()) {
+		node[1] = arena.reserve<mstd::Tree<Plane, 2>>(1);
+		partition(arena, frontArena, backArena, backFaces, *node[1]);
+	} else {
+		node[1] = nullptr;
+	}
 
 	frontArena.truncate(frontFaces.data());
 	backArena.truncate(backFaces.data());
-}
-
-static mstd::Tree<Plane, 2> convert(mstd::Arena& arena, const mstd::Tree<BSPNode, 2>& b) {
-	using namespace mstd;
-
-	Tree<Plane, 2> result;
-
-	result.value = b.value.split;
-
-	if (b.data()) {
-		result.addChildren(arena);
-		result[0] = convert(arena, b[0]);
-		result[1] = convert(arena, b[1]);
-	}
-
-	return std::move(result);
 }
 
 static void optimizeTopology(
@@ -389,12 +346,7 @@ void BSP::build(const std::string& path) {
 	Arena frontArena(faces.size_bytes() * 16);
 	Arena backArena(faces.size_bytes() * 16);
 
-	Tree<BSPNode, 2> b;
-	b.value.faces = faces;
-	partition(bspArena, frontArena, backArena, b, 0);
-	rootSplit = convert(arena, b);
-
-	bspArena.truncate(faces.data() + faces.size());
+	partition(arena, frontArena, backArena, faces, rootSplit);
 
 	std::vector<Vector3f> vertices;
 	std::vector<Vector3f> normals;
@@ -427,14 +379,14 @@ void BSP::build(const std::string& path) {
 
 mstd::Bool findNode(const mstd::Tree<Plane, 2>& b, const mstd::Vector3f& p) {
 	if (b.value.distance(p) >= 0.0f) {
-		if (b[0].data()) {
-			return findNode(b[0], p);
+		if (b[0]) {
+			return findNode(*b[0], p);
 		}
 
 		return false;
 	} else {
-		if (b[1].data()) {
-			return findNode(b[1], p);
+		if (b[1]) {
+			return findNode(*b[1], p);
 		}
 
 		return true;
@@ -464,9 +416,43 @@ void printNode(const mstd::Tree<Plane, 2>& b, mstd::U32 pad) {
 	escapeCode += "m";
 	std::cout << escapeCode << std::string(b.value.normal) << ", " << b.value.d << std::endl;
 
-	if (b.data()) {
-		printNode(b[0], pad + 1);
-		printNode(b[1], pad + 1);
+	if (b[0]) {
+		printNode(*b[0], pad + 1);
+	} else {
+		for (U32 i = 0; i < pad + 1; ++i) {
+			U32 color = (i % 7) + 31;
+			std::string escapeCode;
+			escapeCode = "\e[";
+			escapeCode += std::to_string(color);
+			escapeCode += "m";
+			std::cout << escapeCode << '|';
+		}
+		U32 color = (pad % 7) + 31;
+		std::string escapeCode;
+		escapeCode = "\e[";
+		escapeCode += std::to_string(color);
+		escapeCode += "m";
+		std::cout << escapeCode << "EMPTY" << std::endl;
+	}
+
+	if (b[1]) {
+		printNode(*b[1], pad + 1);
+	} else {
+		++pad;
+		for (U32 i = 0; i < pad + 1; ++i) {
+			U32 color = (i % 7) + 31;
+			std::string escapeCode;
+			escapeCode = "\e[";
+			escapeCode += std::to_string(color);
+			escapeCode += "m";
+			std::cout << escapeCode << '|';
+		}
+		U32 color = (pad % 7) + 31;
+		std::string escapeCode;
+		escapeCode = "\e[";
+		escapeCode += std::to_string(color);
+		escapeCode += "m";
+		std::cout << escapeCode << "SOLID" << std::endl;
 	}
 }
 
