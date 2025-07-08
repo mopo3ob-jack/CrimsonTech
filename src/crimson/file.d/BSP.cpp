@@ -142,9 +142,9 @@ static mstd::Bool splitTriangle(const Plane& plane, const Face& face, std::optio
 	for (Size i = 0; i < 3; ++i) {
 		curr = face.vertices + i;
 		F32 prevDistance = plane.distance(*prev);
-		if (prevDistance > 0.0f) {
+		if (prevDistance > 1.0f / 1024.0f) {
 			frontVertices[frontCount++] = *prev;
-		} else if (prevDistance < 0.0f) {
+		} else if (prevDistance < -1.0f / 1024.0f) {
 			backVertices[backCount++] = *prev;
 		} else {
 			frontVertices[frontCount++] = *prev;
@@ -231,12 +231,59 @@ static mstd::Bool splitTriangle(const Plane& plane, const Face& face, std::optio
 	return false;
 }
 
+static void logPartition(mstd::Bool solid, BSP::Node* node, mstd::Size depth) {
+	using namespace mstd;
+
+	for (U32 i = 0; i < depth; ++i) {
+		U32 color = (i % 7) + 31;
+		std::string escapeCode;
+		escapeCode = "\e[";
+		escapeCode += std::to_string(color);
+		escapeCode += "m";
+		std::cout << escapeCode << '|';
+	}
+
+	if (node) {
+		U32 color = (depth % 7) + 31;
+		std::string escapeCode;
+		escapeCode = "\e[";
+		escapeCode += std::to_string(color);
+		escapeCode += "m";
+		std::cout
+			<< escapeCode
+			<< std::string(node->value.normal) << ", "
+			<< node->value.d << std::endl;
+		return;
+	}
+
+	for (U32 i = 0; i < depth; ++i) {
+		U32 color = (i % 7) + 31;
+		std::string escapeCode;
+		escapeCode = "\e[";
+		escapeCode += std::to_string(color);
+		escapeCode += "m";
+		std::cout << escapeCode << '|';
+	}
+	
+	U32 color = (depth % 7) + 31;
+	std::string escapeCode;
+	escapeCode = "\e[";
+	escapeCode += std::to_string(color);
+	escapeCode += "m";
+	if (solid) {
+		std::cout << escapeCode << "SOLID" << std::endl;
+	} else {
+		std::cout << escapeCode << "EMPTY" << std::endl;
+	}
+}
+
 static void partition(
 	mstd::Arena& arena,
 	mstd::Arena& frontArena,
 	mstd::Arena& backArena,
 	const std::span<Face>& faces,
-	mstd::Tree<Plane, 2>& node
+	BSP::Node& node,
+	mstd::Size depth
 ) {
 	using namespace mstd;
 
@@ -277,17 +324,21 @@ static void partition(
 	std::span<Face> frontFaces = std::span(frontStart, frontArena.tell<Face>());
 	std::span<Face> backFaces = std::span(backStart, backArena.tell<Face>());
 
+	logPartition(false, &node, depth);
+
 	if (frontFaces.size()) {
-		node[0] = arena.reserve<mstd::Tree<Plane, 2>>(1);
-		partition(arena, frontArena, backArena, frontFaces, *node[0]);
+		node[0] = arena.reserve<BSP::Node>(1);
+		partition(arena, frontArena, backArena, frontFaces, *node[0], depth + 1);
 	} else {
+		logPartition(false, nullptr, depth + 1);
 		node[0] = nullptr;
 	}
 
 	if (backFaces.size()) {
-		node[1] = arena.reserve<mstd::Tree<Plane, 2>>(1);
-		partition(arena, frontArena, backArena, backFaces, *node[1]);
+		node[1] = arena.reserve<BSP::Node>(1);
+		partition(arena, frontArena, backArena, backFaces, *node[1], depth + 1);
 	} else {
+		logPartition(true, nullptr, depth + 1);
 		node[1] = nullptr;
 	}
 
@@ -343,10 +394,10 @@ void BSP::build(const std::string& path) {
 
 	if (import(path, bspArena, faces)) return;
 
-	Arena frontArena(faces.size_bytes() * 16);
-	Arena backArena(faces.size_bytes() * 16);
+	Arena frontArena(faces.size_bytes() * 256);
+	Arena backArena(faces.size_bytes() * 256);
 
-	partition(arena, frontArena, backArena, faces, rootSplit);
+	partition(arena, frontArena, backArena, faces, rootSplit, 0);
 
 	std::vector<Vector3f> vertices;
 	std::vector<Vector3f> normals;
@@ -377,27 +428,104 @@ void BSP::build(const std::string& path) {
 	vertexArray.writeElements(indices.data(), indices.size());
 }
 
-mstd::Bool findNode(const mstd::Tree<Plane, 2>& b, const mstd::Vector3f& p) {
+static mstd::Bool findNode(const BSP::Node& b, const mstd::Vector3f& p, const BSP::Node*& result) {
 	if (b.value.distance(p) >= 0.0f) {
 		if (b[0]) {
-			return findNode(*b[0], p);
+			return findNode(*b[0], p, result);
 		}
+
+		result = &b;
 
 		return false;
 	} else {
 		if (b[1]) {
-			return findNode(*b[1], p);
+			return findNode(*b[1], p, result);
 		}
+
+		result = &b;
 
 		return true;
 	}
 }
 
 mstd::Bool BSP::colliding(const mstd::Vector3f& point) const {
-	return findNode(rootSplit, point);
+	const BSP::Node* result;
+	return findNode(rootSplit, point, result);
 }
 
-void printNode(const mstd::Tree<Plane, 2>& b, mstd::U32 pad) {
+mstd::Bool BSP::intersect(
+	const mstd::Vector3f& from,
+	const mstd::Vector3f& to,
+	BSP::Intersection& result
+) const {
+	return intersect(from, to, result, rootSplit);
+}
+
+mstd::Bool BSP::intersect(
+	const mstd::Vector3f& from,
+	const mstd::Vector3f& to,
+	BSP::Intersection& result,
+	const BSP::Node& node
+) const {
+	using namespace mstd;
+
+	F32 distA = node.value.distance(from);
+	F32 distB = node.value.distance(to);
+
+	if (distA >= 0.0f && distB >= 0.0f) {
+		if (node[0]) {
+			return intersect(from, to, result, *(node[0]));
+		} else {
+			result.point = to;
+			return false;
+		}
+	}
+
+	if (distA <= 0.0f && distB <= 0.0f) {
+		if (node[1]) {
+			return intersect(from, to, result, *(node[1]));
+		} else {
+			result.point = from;
+			return true;
+		}
+	}
+
+	static constexpr F32 epsilon = 1.0f / 256.0f;
+
+	F32 frontT = (distA - epsilon) / (distA - distB);
+	F32 backT = (distA + epsilon) / (distA - distB);
+
+	Bool negative = distA < 0.0f;
+	Vector3f nearSplit, farSplit;
+	if (negative) {
+		nearSplit = from + (to - from) * backT;
+		farSplit = from + (to - from) * frontT;
+	} else {
+		nearSplit = from + (to - from) * frontT;
+		farSplit = from + (to - from) * backT;
+	}
+	
+	result.plane = node.value;
+	
+	if (node[negative]) {
+		if (intersect(from, nearSplit, result, *(node[negative]))) {
+			return true;
+		}
+	}
+
+	if (colliding(farSplit)) {
+		result.point = nearSplit;
+		return true;
+	}
+
+	if (node[1 - negative]) {
+		return intersect(farSplit, to, result, *(node[1 - negative]));
+	} else {
+		return true;
+	}
+}
+
+void printNode(const BSP::Node& b, mstd::U32 pad) {
 	using namespace mstd;
 
 	for (U32 i = 0; i < pad; ++i) {

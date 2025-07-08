@@ -10,6 +10,7 @@
 #include <iostream>
 #include <algorithm>
 #include <GL/glu.h>
+#include <Player.hpp>
 
 using namespace mstd;
 using namespace ct;
@@ -82,6 +83,8 @@ int main() {
 	if (glfwRawMouseMotionSupported()) {
 		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 	}
+
+	glfwSwapInterval(1);
 
 	glViewport(0, 0, mode->width, mode->height);
 	glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -216,9 +219,12 @@ int main() {
 	vertexArray.allocateElements(sizeof(indices));
 	vertexArray.writeElements(indices, sizeof(indices) / sizeof(U16));
 
-	Vector3f cameraPosition = Vector3f(0.0, 1.545, -2.0);
-	Vector3f cameraVelocity = Vector3f(0.0, 0.0, 0.0);
+	Player player;
+	player.position = Vector3f(0.0f, 0.0f, 0.0f);
+	player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
 	Vector3f cameraAngle = Vector3f(0.0, 0.0, 0.0);
+	BSP::Intersection result;
+	Bool colliding = false;
 	F32 airTime = 0.0f;
 	F32 verticalVelocity = 0.0f;
 
@@ -240,42 +246,42 @@ int main() {
 
 		cameraAngle.x = std::clamp(cameraAngle.x, F32(-M_PI_2), F32(M_PI_2));
 
-		Vector3f cameraAcceleration = Vector3f(0.0);
+		player.acceleration = Vector3f(0.0f);
 		if (glfwGetKey(window, GLFW_KEY_W)) {
-			cameraAcceleration += Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
+			player.acceleration += Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_S)) {
-			cameraAcceleration -= Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
+			player.acceleration -= Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_D)) {
-			cameraAcceleration += Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+			player.acceleration += Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_A)) {
-			cameraAcceleration -= Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+			player.acceleration -= Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
 		}
 
-		if (magnitude(cameraAcceleration) > 1.0f) {
-			cameraAcceleration = normalize(cameraAcceleration);
+		if (glfwGetKey(window, GLFW_KEY_SPACE) && airTime == 0.0f) {
+			verticalVelocity = 5.0f;
 		}
 
-		cameraAcceleration *= maxAcceleration;
-
-		Vector3f cameraFriction = normalize(cameraVelocity) * frictionCoefficient * -9.81 * deltaTime;
-		if (magnitude(cameraVelocity) > magnitude(cameraFriction)) {
-			cameraVelocity += cameraFriction;
-		} else {
-			cameraVelocity = Vector3f(0.0f);
+		if (glfwGetKey(window, GLFW_KEY_E)) {
+			player.velocity.y = 1.0f;
 		}
 
-		cameraVelocity += cameraAcceleration * deltaTime;
-		if (magnitude(cameraVelocity) > maxVelocity) {
-			cameraVelocity = normalize(cameraVelocity) * maxVelocity;
+		if (glfwGetKey(window, GLFW_KEY_Q)) {
+			player.velocity.y = -1.0f;
 		}
 
-		cameraPosition += cameraVelocity * deltaTime;
+		if (magnitude(player.acceleration) > 1.0f) {
+			player.acceleration = normalize(player.acceleration);
+		}
+
+		player.acceleration *= maxAcceleration;
+
+		player.update(deltaTime, bsp);
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -289,14 +295,14 @@ int main() {
 			projectionMatrix
 			* rotateX(cameraAngle.x)
 			* rotateY(cameraAngle.y)
-			* translate(-cameraPosition);
+			* translate(-player.position);
 
 		shader.use();
 
 		glUniformMatrix4fv(objectUniform, 1, GL_FALSE, (GLfloat*)&objectMatrix);
 		glUniformMatrix4fv(rotationUniform, 1, GL_FALSE, (GLfloat*)&rotationMatrix);
 		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
-		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&cameraPosition);
+		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&player.position);
 
 		rotationMatrix = rotateX(0.0f);
 
@@ -306,7 +312,7 @@ int main() {
 		glUniformMatrix4fv(objectUniform, 1, GL_FALSE, (GLfloat*)&objectMatrix);
 		glUniformMatrix4fv(rotationUniform, 1, GL_FALSE, (GLfloat*)&rotationMatrix);
 		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
-		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&cameraPosition);
+		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&player.position);
 
 		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
 
