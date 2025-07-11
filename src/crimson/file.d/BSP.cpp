@@ -244,7 +244,7 @@ static void logPartition(mstd::Bool solid, BSP::Node* node, mstd::Size depth) {
 	for (U32 i = 0; i < depth; ++i) {
 		U32 color = (i % 7) + 31;
 		std::string escapeCode;
-		escapeCode = "\e[";
+		escapeCode = "\033[";
 		escapeCode += std::to_string(color);
 		escapeCode += "m";
 		std::cout << escapeCode << '|';
@@ -253,7 +253,7 @@ static void logPartition(mstd::Bool solid, BSP::Node* node, mstd::Size depth) {
 	if (node) {
 		U32 color = (depth % 7) + 31;
 		std::string escapeCode;
-		escapeCode = "\e[";
+		escapeCode = "\033[";
 		escapeCode += std::to_string(color);
 		escapeCode += "m";
 		std::cout
@@ -266,7 +266,7 @@ static void logPartition(mstd::Bool solid, BSP::Node* node, mstd::Size depth) {
 	for (U32 i = 0; i < depth; ++i) {
 		U32 color = (i % 7) + 31;
 		std::string escapeCode;
-		escapeCode = "\e[";
+		escapeCode = "\033[";
 		escapeCode += std::to_string(color);
 		escapeCode += "m";
 		std::cout << escapeCode << '|';
@@ -274,7 +274,7 @@ static void logPartition(mstd::Bool solid, BSP::Node* node, mstd::Size depth) {
 	
 	U32 color = (depth % 7) + 31;
 	std::string escapeCode;
-	escapeCode = "\e[";
+	escapeCode = "\033[";
 	escapeCode += std::to_string(color);
 	escapeCode += "m";
 	if (solid) {
@@ -560,7 +560,7 @@ void printNode(const BSP::Node& b, mstd::U32 pad) {
 	for (U32 i = 0; i < pad; ++i) {
 		U32 color = (i % 7) + 31;
 		std::string escapeCode;
-		escapeCode = "\e[";
+		escapeCode = "\033[";
 		escapeCode += std::to_string(color);
 		escapeCode += "m";
 		std::cout << escapeCode << '|';
@@ -568,7 +568,7 @@ void printNode(const BSP::Node& b, mstd::U32 pad) {
 
 	U32 color = (pad % 7) + 31;
 	std::string escapeCode;
-	escapeCode = "\e[";
+	escapeCode = "\033[";
 	escapeCode += std::to_string(color);
 	escapeCode += "m";
 	std::cout << escapeCode << std::string(b.value.normal) << ", " << b.value.d << std::endl;
@@ -579,14 +579,14 @@ void printNode(const BSP::Node& b, mstd::U32 pad) {
 		for (U32 i = 0; i < pad + 1; ++i) {
 			U32 color = (i % 7) + 31;
 			std::string escapeCode;
-			escapeCode = "\e[";
+			escapeCode = "\033[";
 			escapeCode += std::to_string(color);
 			escapeCode += "m";
 			std::cout << escapeCode << '|';
 		}
 		U32 color = (pad % 7) + 31;
 		std::string escapeCode;
-		escapeCode = "\e[";
+		escapeCode = "\033[";
 		escapeCode += std::to_string(color);
 		escapeCode += "m";
 		std::cout << escapeCode << "EMPTY" << std::endl;
@@ -599,14 +599,14 @@ void printNode(const BSP::Node& b, mstd::U32 pad) {
 		for (U32 i = 0; i < pad + 1; ++i) {
 			U32 color = (i % 7) + 31;
 			std::string escapeCode;
-			escapeCode = "\e[";
+			escapeCode = "\033[";
 			escapeCode += std::to_string(color);
 			escapeCode += "m";
 			std::cout << escapeCode << '|';
 		}
 		U32 color = (pad % 7) + 31;
 		std::string escapeCode;
-		escapeCode = "\e[";
+		escapeCode = "\033[";
 		escapeCode += std::to_string(color);
 		escapeCode += "m";
 		std::cout << escapeCode << "SOLID" << std::endl;
