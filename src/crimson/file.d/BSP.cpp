@@ -54,7 +54,14 @@ static mstd::Status import(
 					*(Vector3f*)&mesh->mVertices[face.mIndices[2]],
 				},
 			};
+			for (Size i = 0; i < 3; ++i) {
+				std::swap(result.vertices[i].y, result.vertices[i].z);
+				result.vertices[i].y = -result.vertices[i].y;
+			}
 			result.normal = *(Vector3f*)&mesh->mNormals[face.mIndices[0]];
+			std::swap(result.normal.y, result.normal.z);
+			result.normal.y = -result.normal.y;
+			result.normal = normalize(result.normal);
 			result.d = dot(result.normal, result.vertices[0]);
 
 			arena.append(1, &result);
@@ -456,15 +463,17 @@ mstd::Bool BSP::colliding(const mstd::Vector3f& point) const {
 mstd::Bool BSP::intersect(
 	const mstd::Vector3f& from,
 	const mstd::Vector3f& to,
-	BSP::Intersection& result
+	BSP::Trace& result
 ) const {
-	return intersect(from, to, result, rootSplit);
+	return intersect(0.0f, 1.0f, from, to, result, rootSplit);
 }
 
 mstd::Bool BSP::intersect(
+	const mstd::F32 fromT,
+	const mstd::F32 toT,
 	const mstd::Vector3f& from,
 	const mstd::Vector3f& to,
-	BSP::Intersection& result,
+	BSP::Trace& result,
 	const BSP::Node& node
 ) const {
 	using namespace mstd;
@@ -474,7 +483,7 @@ mstd::Bool BSP::intersect(
 
 	if (distA >= 0.0f && distB >= 0.0f) {
 		if (node[0]) {
-			return intersect(from, to, result, *(node[0]));
+			return intersect(fromT, toT, from, to, result, *(node[0]));
 		} else {
 			result.point = to;
 			return false;
@@ -483,7 +492,7 @@ mstd::Bool BSP::intersect(
 
 	if (distA <= 0.0f && distB <= 0.0f) {
 		if (node[1]) {
-			return intersect(from, to, result, *(node[1]));
+			return intersect(fromT, toT, from, to, result, *(node[1]));
 		} else {
 			result.point = from;
 			return true;
@@ -492,37 +501,57 @@ mstd::Bool BSP::intersect(
 
 	static constexpr F32 epsilon = 1.0f / 256.0f;
 
-	F32 frontT = (distA - epsilon) / (distA - distB);
-	F32 backT = (distA + epsilon) / (distA - distB);
-
-	Bool negative = distA < 0.0f;
-	Vector3f nearSplit, farSplit;
-	if (negative) {
-		nearSplit = from + (to - from) * backT;
-		farSplit = from + (to - from) * frontT;
+	F32 t;
+	if (distA < 0.0f) {
+		t = (distA + epsilon) / (distA - distB);
 	} else {
-		nearSplit = from + (to - from) * frontT;
-		farSplit = from + (to - from) * backT;
+		t = (distA - epsilon) / (distA - distB);
 	}
-	
-	result.plane = node.value;
-	
-	if (node[negative]) {
-		if (intersect(from, nearSplit, result, *(node[negative]))) {
+
+	t = std::clamp(t, 0.0f, 1.0f);
+
+	F32 splitT = fromT + (toT - fromT) * t;
+	Vector3f split = from + (to - from) * t;
+
+	I32 side = distA < 0.0f;
+
+	if (node[side]) {
+		if (intersect(fromT, splitT, from, split, result, *(node[side]))) {
+			result.velocity -= node.value.normal * dot(result.velocity, node.value.normal);
 			return true;
 		}
 	}
 
-	if (colliding(farSplit)) {
-		result.point = nearSplit;
-		return true;
+	if (node[side ^ 1]) {
+		if (!colliding(split)) {
+			return intersect(splitT, toT, split, to, result, *(node[side ^ 1]));
+		}
 	}
 
-	if (node[1 - negative]) {
-		return intersect(farSplit, to, result, *(node[1 - negative]));
+	if (!side) {
+		result.plane = node.value;
 	} else {
-		return true;
+		result.plane.normal = -node.value.normal;
+		result.plane.d = -node.value.d;
 	}
+	
+	result.velocity -= result.plane.normal * dot(result.velocity, result.plane.normal);
+
+	while (colliding(split)) {
+		if (!(t < 10000000) && !(t > -10000000)) {
+			return true;
+		}
+		t -= 0.1f;
+		if (t < 0.0f) {
+			return true;
+		}
+		splitT = fromT + (toT - fromT) * t;
+		split = from + (to - from) * t;
+	}
+
+	result.point = split;
+
+	return true;
 }
 
 void printNode(const BSP::Node& b, mstd::U32 pad) {

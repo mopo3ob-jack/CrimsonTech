@@ -21,15 +21,16 @@ public:
 
 	mstd::Bool colliding(const mstd::Vector3f& point) const;
 
-	struct Intersection {
+	struct Trace {
 		mstd::Vector3f point;
+		mstd::Vector3f velocity;
 		Plane plane;
 	};
 
 	mstd::Bool intersect(
 		const mstd::Vector3f& from,
 		const mstd::Vector3f& to,
-		Intersection& result
+		Trace& result
 	) const;
 
 	void print() const;
@@ -41,9 +42,11 @@ private:
 	Node rootSplit;
 
 	mstd::Bool intersect(
+		const mstd::F32 fromT,
+		const mstd::F32 toT,
 		const mstd::Vector3f& from,
 		const mstd::Vector3f& to,
-		Intersection& result,
+		Trace& result,
 		const Node& node
 	) const;
 };

@@ -11,17 +11,22 @@ public:
 		using namespace ct;
 
 		constexpr F32 gravity = -9.81f;
-		constexpr F32 frictionCoefficient = 0.1f;
+		constexpr F32 frictionCoefficient = 1.7f;
 		constexpr F32 maxVelocity = 6.0f;
 
-		BSP::Intersection result;
+		if (colliding) {
+			//velocity -= result.plane.normal * dot(result.plane.normal, velocity);
+			//acceleration -= result.plane.normal * dot(result.plane.normal, acceleration);
+		}
 
+		result.velocity = velocity;
 		Vector3f targetPosition = position + velocity * deltaTime;
-		Bool colliding = bsp.intersect(position, targetPosition, result);
+		colliding = bsp.intersect(position, targetPosition, result);
 		position = result.point;
+		velocity = result.velocity;
 
 		if (colliding) {
-			acceleration -= result.plane.normal * dot(result.plane.normal, acceleration);
+			//acceleration -= result.plane.normal * dot(result.plane.normal, acceleration);
 		}
 		velocity += acceleration * deltaTime;
 
@@ -33,10 +38,6 @@ public:
 			velocity.z = hVelocity.z;
 		}
 
-		if (colliding) {
-			velocity -= result.plane.normal * dot(result.plane.normal, velocity);
-		}
-
 		Vector3f friction = normalize(velocity) * gravity * frictionCoefficient * deltaTime;
 		if (magnitude(friction) < magnitude(velocity)) {
 			velocity += friction;
@@ -46,6 +47,8 @@ public:
 	}
 
 	mstd::Vector3f position, velocity, acceleration;
+	ct::BSP::Trace result;
+	mstd::Bool colliding;
 };
 
 #endif

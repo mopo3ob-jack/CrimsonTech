@@ -223,7 +223,6 @@ int main() {
 	player.position = Vector3f(0.0f, 0.0f, 0.0f);
 	player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
 	Vector3f cameraAngle = Vector3f(0.0, 0.0, 0.0);
-	BSP::Intersection result;
 	Bool colliding = false;
 	F32 airTime = 0.0f;
 	F32 verticalVelocity = 0.0f;
@@ -267,6 +266,7 @@ int main() {
 			verticalVelocity = 5.0f;
 		}
 
+		player.velocity.y = 0.0f;
 		if (glfwGetKey(window, GLFW_KEY_E)) {
 			player.velocity.y = 1.0f;
 		}
