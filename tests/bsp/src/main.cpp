@@ -3,19 +3,22 @@
 
 #include <crimson/renderer>
 #include <crimson/file>
+#include <crimson/game>
 #include <crimson/types.d/Plane.hpp>
 
 #include <GLFW/glfw3.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_opengl3.h>
 
 #include <iostream>
 #include <algorithm>
 #include <GL/glu.h>
-#include <Player.hpp>
 
 using namespace mstd;
 using namespace ct;
 
-static constexpr Vector2f sensitivity(0.15f, 0.15f);
+static constexpr Vector2f sensitivity(0.5f, 0.5f);
 
 static constexpr F32 maxVelocity = 6.0f;
 static constexpr F32 maxAcceleration = 40.0;
@@ -79,10 +82,18 @@ int main() {
 	projectionMatrix = perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f);
 
 	glfwSetFramebufferSizeCallback(window, resize);
+	Bool cursorEnabled = false;
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	if (glfwRawMouseMotionSupported()) {
 		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 	}
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init();
 
 	glfwSwapInterval(1);
 
@@ -109,7 +120,6 @@ int main() {
 
 	BSP bsp;
 	bsp.build("resources/models/room.fbx");
-	bsp.print();
 
 	std::vector<VertexArray::Attribute> vertexAttributes = {
 		{
@@ -220,81 +230,89 @@ int main() {
 	vertexArray.writeElements(indices, sizeof(indices) / sizeof(U16));
 
 	Player player;
-	player.position = Vector3f(0.0f, 0.0f, 0.0f);
+	player.position = Vector3f(0.0f, 1.0f, 0.0f);
 	player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
-	Vector3f cameraAngle = Vector3f(0.0, 0.0, 0.0);
-	Bool colliding = false;
-	F32 airTime = 0.0f;
-	F32 verticalVelocity = 0.0f;
+	player.angle = Vector3f(0.0f);
 
-	F64 previousTime = glfwGetTime();
-	F32 deltaTime = 0;
 	Vector2d prevMousePosition;
 	glfwGetCursorPos(window, &prevMousePosition.x, &prevMousePosition.y);
 	Vector2d mouseDelta;
 
+	Size imguiFrames = 0;
 	do {
 		glfwPollEvents();
+		Time::update();
+
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
+		if (glfwGetKey(window, GLFW_KEY_TAB)) {
+			++imguiFrames;
+		} else {
+			imguiFrames = 0;
+		}
+
+		if (imguiFrames == 1) {
+			if (cursorEnabled) {
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+				io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+				io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+			} else {
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+				io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+				io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+			}
+
+			cursorEnabled ^= 1;
+		}
 
 		Vector2d mousePosition;
 		glfwGetCursorPos(window, &mousePosition.x, &mousePosition.y);
-		mouseDelta = mousePosition - prevMousePosition;
+		if (!cursorEnabled) {
+			mouseDelta = mousePosition - prevMousePosition;
+			player.angle.x += mouseDelta.y * sensitivity.y / F32(mode->height);
+			player.angle.y += mouseDelta.x * sensitivity.x / F32(mode->height);
+
+			player.angle.x = std::clamp(player.angle.x, F32(-M_PI_2), F32(M_PI_2));
+		}
 		prevMousePosition = mousePosition;
-		cameraAngle.x += mouseDelta.y * deltaTime * sensitivity.y;
-		cameraAngle.y += mouseDelta.x * deltaTime * sensitivity.x;
 
-		cameraAngle.x = std::clamp(cameraAngle.x, F32(-M_PI_2), F32(M_PI_2));
-
-		player.acceleration = Vector3f(0.0f);
+		player.keyMask = 0;
 		if (glfwGetKey(window, GLFW_KEY_W)) {
-			player.acceleration += Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
+			player.keyMask |= player.FORWARD;
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_S)) {
-			player.acceleration -= Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
+			player.keyMask |= player.BACKWARD;
 		}
-
+		
 		if (glfwGetKey(window, GLFW_KEY_D)) {
-			player.acceleration += Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+			player.keyMask |= player.RIGHT;
 		}
-
+		
 		if (glfwGetKey(window, GLFW_KEY_A)) {
-			player.acceleration -= Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+			player.keyMask |= player.LEFT;
 		}
-
-		if (glfwGetKey(window, GLFW_KEY_SPACE) && airTime == 0.0f) {
-			verticalVelocity = 5.0f;
+		
+		if (glfwGetKey(window, GLFW_KEY_SPACE)) {
+			player.keyMask |= player.JUMP;
 		}
-
-		player.velocity.y = 0.0f;
-		if (glfwGetKey(window, GLFW_KEY_E)) {
-			player.velocity.y = 1.0f;
-		}
-
-		if (glfwGetKey(window, GLFW_KEY_Q)) {
-			player.velocity.y = -1.0f;
-		}
-
-		if (magnitude(player.acceleration) > 1.0f) {
-			player.acceleration = normalize(player.acceleration);
-		}
-
-		player.acceleration *= maxAcceleration;
-
-		player.update(deltaTime, bsp);
+		
+		player.update(bsp);
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		Matrix4f rotationMatrix = 
-			rotateX(previousTime)
-			* rotateY(previousTime);
+			rotateX(Time::time)
+			* rotateY(Time::time);
 
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 
 		Matrix4f cameraMatrix = 
 			projectionMatrix
-			* rotateX(cameraAngle.x)
-			* rotateY(cameraAngle.y)
+			* rotateX(player.angle.x)
+			* rotateY(player.angle.y)
 			* translate(-player.position);
 
 		shader.use();
@@ -316,12 +334,15 @@ int main() {
 
 		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
 
-		glfwSwapBuffers(window);
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-		F64 time = glfwGetTime();
-		deltaTime = time - previousTime;
-		previousTime = time;
+		glfwSwapBuffers(window);
 	} while (!glfwWindowShouldClose(window));
+
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 
 	glfwDestroyWindow(window);
 	glfwTerminate();

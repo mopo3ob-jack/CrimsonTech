@@ -5,6 +5,7 @@
 #include <crimson/types.d/Plane.hpp>
 #include <string>
 #include <mstd/memory>
+#include <span>
 
 namespace ct {
 
@@ -23,11 +24,16 @@ public:
 
 	struct Trace {
 		mstd::Vector3f point;
-		mstd::Vector3f velocity;
 		Plane plane;
 	};
 
-	mstd::Bool intersect(
+	/*mstd::Bool intersect(
+		const mstd::Vector3f& from,
+		const mstd::Vector3f& to,
+		Trace& result
+	) const;*/
+
+	mstd::Bool clip(
 		const mstd::Vector3f& from,
 		const mstd::Vector3f& to,
 		Trace& result
@@ -41,9 +47,16 @@ private:
 	mstd::Arena arena;
 	Node rootSplit;
 
-	mstd::Bool intersect(
-		const mstd::F32 fromT,
-		const mstd::F32 toT,
+	/*mstd::Bool intersect(
+		const mstd::Vector3f& from,
+		const mstd::Vector3f& to,
+		Trace& result,
+		const Node& node
+	) const;*/
+
+	mstd::Bool isSolid(const mstd::Vector3f& point, const Node* node) const;
+
+	mstd::Bool clip(
 		const mstd::Vector3f& from,
 		const mstd::Vector3f& to,
 		Trace& result,

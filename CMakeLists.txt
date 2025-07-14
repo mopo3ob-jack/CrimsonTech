@@ -39,8 +39,10 @@ target_link_libraries(crimson PUBLIC mstd glfw OpenGL::GL OpenGL::GLU assimp)
 set_target_properties(crimson PROPERTIES CXX_STANDARD 20)
 
 add_subdirectory(src/glad)
+add_subdirectory(src/imgui)
 add_subdirectory(src/crimson/renderer.d)
 add_subdirectory(src/crimson/file.d)
+add_subdirectory(src/crimson/game.d)
 
 set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build tiling test programs")
 if (${CRIMSON_BUILD_TESTS})

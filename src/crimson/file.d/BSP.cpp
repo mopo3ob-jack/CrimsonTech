@@ -11,6 +11,8 @@
 
 #include <cassert>
 
+#include <imgui/imgui.h>
+
 namespace ct {
 
 struct Face : Plane {
@@ -289,8 +291,7 @@ static void partition(
 	mstd::Arena& frontArena,
 	mstd::Arena& backArena,
 	const std::span<Face>& faces,
-	BSP::Node& node,
-	mstd::Size depth
+	BSP::Node& node
 ) {
 	using namespace mstd;
 
@@ -331,21 +332,17 @@ static void partition(
 	std::span<Face> frontFaces = std::span(frontStart, frontArena.tell<Face>());
 	std::span<Face> backFaces = std::span(backStart, backArena.tell<Face>());
 
-	logPartition(false, &node, depth);
-
 	if (frontFaces.size()) {
 		node[0] = arena.reserve<BSP::Node>(1);
-		partition(arena, frontArena, backArena, frontFaces, *node[0], depth + 1);
+		partition(arena, frontArena, backArena, frontFaces, *node[0]);
 	} else {
-		logPartition(false, nullptr, depth + 1);
 		node[0] = nullptr;
 	}
 
 	if (backFaces.size()) {
 		node[1] = arena.reserve<BSP::Node>(1);
-		partition(arena, frontArena, backArena, backFaces, *node[1], depth + 1);
+		partition(arena, frontArena, backArena, backFaces, *node[1]);
 	} else {
-		logPartition(true, nullptr, depth + 1);
 		node[1] = nullptr;
 	}
 
@@ -404,7 +401,7 @@ void BSP::build(const std::string& path) {
 	Arena frontArena(faces.size_bytes() * 256);
 	Arena backArena(faces.size_bytes() * 256);
 
-	partition(arena, frontArena, backArena, faces, rootSplit, 0);
+	partition(arena, frontArena, backArena, faces, rootSplit);
 
 	std::vector<Vector3f> vertices;
 	std::vector<Vector3f> normals;
@@ -460,93 +457,168 @@ mstd::Bool BSP::colliding(const mstd::Vector3f& point) const {
 	return findNode(rootSplit, point, result);
 }
 
-mstd::Bool BSP::intersect(
-	const mstd::Vector3f& from,
-	const mstd::Vector3f& to,
-	BSP::Trace& result
-) const {
-	return intersect(0.0f, 1.0f, from, to, result, rootSplit);
+//mstd::Bool BSP::intersect(
+//	const mstd::Vector3f& from,
+//	const mstd::Vector3f& to,
+//	BSP::Trace& result
+//) const {
+//	return intersect(from, to, result, rootSplit);
+//}
+//
+//mstd::Bool BSP::intersect(
+//	const mstd::Vector3f& from,
+//	const mstd::Vector3f& to,
+//	BSP::Trace& result,
+//	const BSP::Node& node
+//) const {
+//	using namespace mstd;
+//
+//	F32 fromDist = node.value.distance(from);
+//	F32 toDist = node.value.distance(to);
+//
+//	if (fromDist >= 0.0f && toDist >= 0.0f) {
+//		if (node[0]) {
+//			return intersect(from, to, result, *node[0]);
+//		} else {
+//			result.point = to;
+//			return false;
+//		}
+//	}
+//
+//	if (fromDist <= 0.0f && toDist <= 0.0f) {
+//		if (node[1]) {
+//			return intersect(from, to, result, *node[1]);
+//		} else {
+//			return true;
+//		}
+//	}
+//
+//	constexpr F32 EPSILON = 1.0f / 4096.0f;
+//
+//	Bool side = fromDist < 0.0f;
+//	F32 nearT, farT;
+//	Vector3f nearSplit, farSplit;
+//	if (side) {
+//		nearT = (fromDist + EPSILON) / (fromDist - toDist);
+//		farT = (fromDist - EPSILON) / (fromDist - toDist);
+//	} else {
+//		nearT = (fromDist - EPSILON) / (fromDist - toDist);
+//		farT = (fromDist + EPSILON) / (fromDist - toDist);
+//	}
+//
+//	nearT = std::clamp(nearT, 0.0f, 1.0f);
+//	farT = std::clamp(farT, 0.0f, 1.0f);
+//
+//	nearSplit = from + (to - from) * nearT;
+//	farSplit = from + (to - from) * farT;
+//
+//	result.plane = node.value;
+//
+//	if (node[side]) {
+//		if (intersect(from, nearSplit, result, *node[side])) {
+//			return true;
+//		}
+//	}
+//
+//	if (node[side ^ 1]) {
+//		if (intersect(farSplit, to, result, *node[side ^ 1])) {
+//			return true;
+//		}
+//	}
+//
+//	return false;
+//}
+
+mstd::Bool BSP::isSolid(const mstd::Vector3f& point, const Node* node) const {
+	using namespace mstd;
+
+	while (1) {
+		if (node->value.distance(point) >= 0.0f) {
+			if (node->data()[0]) {
+				node = node->data()[0];
+			} else {
+				return false;
+			}
+		} else {
+			if (node->data()[1]) {
+				node = node->data()[1];
+			} else {
+				return true;
+			}
+		}
+	}
 }
 
-mstd::Bool BSP::intersect(
-	const mstd::F32 fromT,
-	const mstd::F32 toT,
+mstd::Bool BSP::clip(
 	const mstd::Vector3f& from,
 	const mstd::Vector3f& to,
-	BSP::Trace& result,
-	const BSP::Node& node
+	Trace& result
+) const {
+	return clip(from, to, result, rootSplit);
+}
+
+mstd::Bool BSP::clip(
+	const mstd::Vector3f& from,
+	const mstd::Vector3f& to,
+	Trace& result,
+	const Node& node
 ) const {
 	using namespace mstd;
 
-	F32 distA = node.value.distance(from);
-	F32 distB = node.value.distance(to);
+	const Plane& p = node.value;
 
-	if (distA >= 0.0f && distB >= 0.0f) {
+	F32 fromDist = p.distance(from);
+	F32 toDist = p.distance(to);
+
+	if (fromDist >= 0.0f && toDist >= 0.0f) {
 		if (node[0]) {
-			return intersect(fromT, toT, from, to, result, *(node[0]));
+			return clip(from, to, result, *node[0]);
 		} else {
 			result.point = to;
 			return false;
 		}
 	}
 
-	if (distA <= 0.0f && distB <= 0.0f) {
+	if (fromDist <= 0.0f && toDist <= 0.0f) {
 		if (node[1]) {
-			return intersect(fromT, toT, from, to, result, *(node[1]));
+			return clip(from, to, result, *node[1]);
 		} else {
 			result.point = from;
 			return true;
 		}
 	}
 
-	static constexpr F32 epsilon = 1.0f / 256.0f;
+	constexpr F32 EPSILON = 1.0f / 4096.0f;
 
+	Bool side = fromDist < 0.0f;
 	F32 t;
-	if (distA < 0.0f) {
-		t = (distA + epsilon) / (distA - distB);
+	if (side) {
+		t = (fromDist + EPSILON) / (fromDist - toDist);
 	} else {
-		t = (distA - epsilon) / (distA - distB);
+		t = (fromDist - EPSILON) / (fromDist - toDist);
 	}
 
 	t = std::clamp(t, 0.0f, 1.0f);
 
-	F32 splitT = fromT + (toT - fromT) * t;
 	Vector3f split = from + (to - from) * t;
 
-	I32 side = distA < 0.0f;
-
 	if (node[side]) {
-		if (intersect(fromT, splitT, from, split, result, *(node[side]))) {
-			result.velocity -= node.value.normal * dot(result.velocity, node.value.normal);
+		if (clip(from, split, result, *node[side])) {
 			return true;
 		}
 	}
 
 	if (node[side ^ 1]) {
-		if (!colliding(split)) {
-			return intersect(splitT, toT, split, to, result, *(node[side ^ 1]));
+		if (!isSolid(split, node[side ^ 1])) {
+			return clip(split, to, result, *node[side ^ 1]);
 		}
 	}
 
-	if (!side) {
-		result.plane = node.value;
-	} else {
+	if (side) {
 		result.plane.normal = -node.value.normal;
 		result.plane.d = -node.value.d;
-	}
-	
-	result.velocity -= result.plane.normal * dot(result.velocity, result.plane.normal);
-
-	while (colliding(split)) {
-		if (!(t < 10000000) && !(t > -10000000)) {
-			return true;
-		}
-		t -= 0.1f;
-		if (t < 0.0f) {
-			return true;
-		}
-		splitT = fromT + (toT - fromT) * t;
-		split = from + (to - from) * t;
+	} else {
+		result.plane = node.value;
 	}
 
 	result.point = split;
