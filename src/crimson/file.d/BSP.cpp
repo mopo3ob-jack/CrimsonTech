@@ -615,15 +615,13 @@ mstd::Bool BSP::clip(
 	}
 
 	if (side) {
-		result.plane.normal = -node.value.normal;
-		result.plane.d = -node.value.d;
+		result.point = to;
+		return false;
 	} else {
 		result.plane = node.value;
+		result.point = split;
+		return true;
 	}
-
-	result.point = split;
-
-	return true;
 }
 
 void printNode(const BSP::Node& b, mstd::U32 pad) {
