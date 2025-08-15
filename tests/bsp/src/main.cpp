@@ -119,7 +119,7 @@ int main() {
 	GLuint cameraPositionUniform = glGetUniformLocation(shader, "cameraPosition");
 	GLuint wireframeUniform = glGetUniformLocation(shader, "wireframe");
 
-	Arena arena(1L << 32);
+	Arena arena((Size)1 << 32);
 	BSP bsp;
 	bsp.build("resources/models/room.fbx", arena);
 

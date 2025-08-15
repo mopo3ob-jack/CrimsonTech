@@ -82,7 +82,7 @@ static mstd::Status import(
 		meshes[m] = std::span(start, arena.tell<Face>());
 	}
 
-	faces = std::span(faces.begin().base(), arena.tell<Face>());
+	faces = std::span(faces.data(), arena.tell<Face>());
 
 	return 0;
 }
@@ -475,7 +475,7 @@ static void optimizeTopology(
 void BSP::build(const std::string& path, mstd::Arena& arena) {
 	using namespace mstd;
 
-	Arena bspArena(1l << 24);
+	Arena bspArena((Size)1 << 24);
 
 	std::span<std::span<Face>> meshes;
 	std::span<Face> faces;
@@ -506,7 +506,7 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 	std::vector<Vector3f> vertices;
 	std::vector<Vector3f> normals;
 	std::vector<U32> indices;
-	optimizeTopology(std::span(finalFaces.begin(), finalFaces.size()), vertices, normals, indices);
+	optimizeTopology(std::span(finalFaces.data(), finalFaces.size()), vertices, normals, indices);
 
 	std::vector<VertexArray::Attribute> attributes = {
 		{
