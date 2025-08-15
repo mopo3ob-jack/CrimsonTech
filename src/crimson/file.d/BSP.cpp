@@ -22,6 +22,7 @@ struct Face : Plane {
 static mstd::Status import(
 	const std::string& path,
 	mstd::Arena& arena,
+	std::span<std::span<Face>>& meshes,
 	std::span<Face>& faces
 ) {
 	using namespace mstd;
@@ -32,8 +33,6 @@ static mstd::Status import(
 		path,
 		aiProcess_CalcTangentSpace |
 		aiProcess_MakeLeftHanded |
-		aiProcess_OptimizeGraph |
-		aiProcess_OptimizeMeshes |
 		aiProcess_JoinIdenticalVertices |
 		aiProcess_Triangulate
 	);
@@ -43,9 +42,20 @@ static mstd::Status import(
 		return 1;
 	}
 
-	Face* start = arena.tell<Face>();
+	if (scene->mNumMeshes == 0) {
+		return 1;
+	}
+
+	meshes = std::span(
+		arena.reserve<std::span<Face>>(scene->mNumMeshes),
+		scene->mNumMeshes
+	);
+
+	faces = std::span(arena.tell<Face>(), 0);
 	for (Size m = 0; m < scene->mNumMeshes; ++m) {
 		aiMesh* mesh = scene->mMeshes[m];
+		Face* start = arena.tell<Face>();
+
 		for (Size f = 0; f < mesh->mNumFaces; ++f) {
 			aiFace face = mesh->mFaces[f];
 			
@@ -68,9 +78,11 @@ static mstd::Status import(
 
 			arena.append(1, &result);
 		}
+
+		meshes[m] = std::span(start, arena.tell<Face>());
 	}
 
-	faces = std::span(start, arena.tell<Face>());
+	faces = std::span(faces.begin().base(), arena.tell<Face>());
 
 	return 0;
 }
@@ -145,15 +157,17 @@ static mstd::Bool splitTriangle(const Plane& plane, const Face& face, std::optio
 	U8 frontCount = 0;
 	U8 backCount = 0;
 	U8 zeroVerts = 0;
+
+	constexpr F32 EPSILON = 1.0f / 4096.0f;
 	
 	const Vector3f* prev = face.vertices + 2;
 	const Vector3f* curr;
 	for (Size i = 0; i < 3; ++i) {
 		curr = face.vertices + i;
 		F32 prevDistance = plane.distance(*prev);
-		if (prevDistance > 1.0f / 1024.0f) {
+		if (prevDistance > EPSILON) {
 			frontVertices[frontCount++] = *prev;
-		} else if (prevDistance < -1.0f / 1024.0f) {
+		} else if (prevDistance < -EPSILON) {
 			backVertices[backCount++] = *prev;
 		} else {
 			frontVertices[frontCount++] = *prev;
@@ -286,6 +300,8 @@ static void logPartition(mstd::Bool solid, BSP::Node* node, mstd::Size depth) {
 	}
 }
 
+std::vector<Face> finalFaces;
+
 static void partition(
 	mstd::Arena& arena,
 	mstd::Arena& frontArena,
@@ -307,15 +323,18 @@ static void partition(
 	for (Size i = 0; i < faces.size(); ++i) {
 		std::optional<Face> result[4] = { std::nullopt };
 		if (splitTriangle(node.value, faces[i], result)) {
+			finalFaces.push_back(faces[i]);
 			continue;
 		}
 
 		if (result[0].has_value()) {
 			Face& f = result[0].value();
 			frontArena.append<Face>(1, &f);
+			finalFaces.push_back(f);
 			if (result[1].has_value()) {
 				f = result[1].value();
 				frontArena.append(1, &f);
+				finalFaces.push_back(f);
 			}
 		}
 
@@ -344,6 +363,70 @@ static void partition(
 		partition(arena, frontArena, backArena, backFaces, *node[1]);
 	} else {
 		node[1] = nullptr;
+	}
+
+	frontArena.truncate(frontFaces.data());
+	backArena.truncate(backFaces.data());
+}
+
+static void merge(
+	mstd::Arena& arena,
+	mstd::Arena& frontArena,
+	mstd::Arena& backArena,
+	const std::span<Face>& faces,
+	BSP::Node& node
+) {
+	using namespace mstd;
+
+	if (faces.empty()) {
+		return;
+	}
+
+	Face* frontStart = frontArena.tell<Face>();
+	Face* backStart = backArena.tell<Face>();
+	for (Size i = 0; i < faces.size(); ++i) {
+		std::optional<Face> result[4] = { std::nullopt };
+		if (splitTriangle(node.value, faces[i], result)) {
+			continue;
+		}
+
+		if (result[0].has_value()) {
+			Face& f = result[0].value();
+			frontArena.append<Face>(1, &f);
+			if (result[1].has_value()) {
+				f = result[1].value();
+				frontArena.append(1, &f);
+			}
+		}
+
+		if (!node[1]) {
+			continue;
+		}
+
+		if (result[2].has_value()) {
+			Face& f = result[2].value();
+			backArena.append(1, &f);
+			if (result[3].has_value()) {
+				f = result[3].value();
+				backArena.append(1, &f);
+			}
+		}
+	}
+
+	std::span<Face> frontFaces = std::span(frontStart, frontArena.tell<Face>());
+	std::span<Face> backFaces = std::span(backStart, backArena.tell<Face>());
+
+	if (frontFaces.size()) {
+		if (node[0]) {
+			merge(arena, frontArena, backArena, frontFaces, *node[0]);
+		} else {
+			node[0] = arena.reserve<BSP::Node>(1);
+			partition(arena, frontArena, backArena, frontFaces, *node[0]);
+		}
+	}
+
+	if (backFaces.size() && node[1]) {
+		merge(arena, frontArena, backArena, backFaces, *node[1]);
 	}
 
 	frontArena.truncate(frontFaces.data());
@@ -389,24 +472,41 @@ static void optimizeTopology(
 	}
 }
 
-void BSP::build(const std::string& path) {
+void BSP::build(const std::string& path, mstd::Arena& arena) {
 	using namespace mstd;
 
-	Arena bspArena(1L << 24);
+	Arena bspArena(1l << 24);
 
+	std::span<std::span<Face>> meshes;
 	std::span<Face> faces;
 
-	if (import(path, bspArena, faces)) return;
+	if (import(path, bspArena, meshes, faces)) return;
 
-	Arena frontArena(faces.size_bytes() * 256);
-	Arena backArena(faces.size_bytes() * 256);
+	Size totalSize = 0l;
+	for (Size i = 0; i < meshes.size(); ++i) {
+		totalSize += meshes[i].size_bytes();
+	}
 
-	partition(arena, frontArena, backArena, faces, rootSplit);
+	std::sort(
+		meshes.begin(),
+		meshes.end(),
+		[](std::span<Face> a, std::span<Face> b) {
+			return a.size() < b.size();
+		}
+	);
+
+	Arena frontArena(totalSize * 256);
+	Arena backArena(totalSize * 256);
+
+	partition(arena, frontArena, backArena, meshes[0], rootSplit);
+	for (Size i = 1; i < meshes.size(); ++i) {
+		merge(arena, frontArena, backArena, meshes[i], rootSplit);
+	}
 
 	std::vector<Vector3f> vertices;
 	std::vector<Vector3f> normals;
 	std::vector<U32> indices;
-	optimizeTopology(faces, vertices, normals, indices);
+	optimizeTopology(std::span(finalFaces.begin(), finalFaces.size()), vertices, normals, indices);
 
 	std::vector<VertexArray::Attribute> attributes = {
 		{

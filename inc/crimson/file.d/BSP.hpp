@@ -5,7 +5,6 @@
 #include <crimson/types.d/Plane.hpp>
 #include <string>
 #include <mstd/memory>
-#include <span>
 
 namespace ct {
 
@@ -14,11 +13,11 @@ public:
 	using Node = mstd::Tree<Plane, 2>;
 	using VectorParam = const mstd::Vector3f&;
 
-	BSP() : arena(1L << 18) {}
+	BSP() {}
 
 	~BSP() {}
 
-	void build(const std::string& path);
+	void build(const std::string& path, mstd::Arena& arena);
 
 	mstd::Bool colliding(const mstd::Vector3f& point) const;
 
@@ -26,12 +25,6 @@ public:
 		mstd::Vector3f point;
 		Plane plane;
 	};
-
-	/*mstd::Bool intersect(
-		const mstd::Vector3f& from,
-		const mstd::Vector3f& to,
-		Trace& result
-	) const;*/
 
 	mstd::Bool clip(
 		const mstd::Vector3f& from,
@@ -43,16 +36,9 @@ public:
 
 	VertexArray vertexArray;
 	mstd::U32 indexCount;
-private:
-	mstd::Arena arena;
-	Node rootSplit;
 
-	/*mstd::Bool intersect(
-		const mstd::Vector3f& from,
-		const mstd::Vector3f& to,
-		Trace& result,
-		const Node& node
-	) const;*/
+private:
+	Node rootSplit;
 
 	mstd::Bool isSolid(const mstd::Vector3f& point, const Node* node) const;
 

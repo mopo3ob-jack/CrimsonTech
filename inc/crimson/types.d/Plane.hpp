@@ -20,8 +20,10 @@ public:
 		F32 denom = dot(normal, direction);
 		if (denom == 0.0f) return false;
 
+		constexpr F32 EPSILON = 1.0f / 4096.0f;
+
 		F32 t = (d - dot(normal, a)) / denom;
-		if (t <= 0.0f || t >= 1.0f) return false;
+		if (t <= EPSILON || t >= 1.0f - EPSILON) return false;
 
 		p = a + direction * t;
 

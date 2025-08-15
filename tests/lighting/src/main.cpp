@@ -117,11 +117,9 @@ int main() {
 	GLuint rotationUniform = glGetUniformLocation(shader, "rotate");
 	GLuint cameraUniform = glGetUniformLocation(shader, "camera");
 	GLuint cameraPositionUniform = glGetUniformLocation(shader, "cameraPosition");
-	GLuint wireframeUniform = glGetUniformLocation(shader, "wireframe");
 
-	Arena arena(1L << 32);
 	BSP bsp;
-	bsp.build("resources/models/room.fbx", arena);
+	bsp.build("resources/models/room.fbx");
 
 	std::vector<VertexArray::Attribute> vertexAttributes = {
 		{
@@ -232,7 +230,7 @@ int main() {
 	vertexArray.writeElements(indices, sizeof(indices) / sizeof(U16));
 
 	Player player;
-	player.position = Vector3f(0.0f, 3.0f, 0.0f);
+	player.position = Vector3f(0.0f, 1.0f, 0.0f);
 	player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
 	player.angle = Vector3f(0.0f);
 
@@ -334,13 +332,6 @@ int main() {
 		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
 		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&player.position);
 
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		glUniform1i(wireframeUniform, 0);
-		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
-
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		glClear(GL_DEPTH_BUFFER_BIT);
-		glUniform1i(wireframeUniform, 1);
 		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
 
 		ImGui::Render();
