@@ -22,8 +22,10 @@ struct Face : Plane {
 static mstd::Status import(
 	const std::string& path,
 	mstd::Arena& arena,
-	std::span<std::span<Face>>& meshes,
-	std::span<Face>& faces
+	std::span<std::span<mstd::U32>>& meshes,
+	std::span<mstd::Vector3f>& vertices,
+	std::span<mstd::Vector3f>& normals,
+	std::span<mstd::U32>& elements
 ) {
 	using namespace mstd;
 
@@ -47,44 +49,82 @@ static mstd::Status import(
 	}
 
 	meshes = std::span(
-		arena.reserve<std::span<Face>>(scene->mNumMeshes),
+		arena.reserve<std::span<U32>>(scene->mNumMeshes),
 		scene->mNumMeshes
 	);
 
-	faces = std::span(arena.tell<Face>(), 0);
+	vertices = std::span(arena.tell<Vector3f>(), 0);
 	for (Size m = 0; m < scene->mNumMeshes; ++m) {
 		aiMesh* mesh = scene->mMeshes[m];
-		Face* start = arena.tell<Face>();
+		arena.append(mesh->mNumVertices, (Vector3f*)mesh->mVertices);
+	}
+	vertices = std::span(vertices.data(), arena.tell<Vector3f>());
 
+	normals = std::span(arena.tell<Vector3f>(), 0);
+	for (Size m = 0; m < scene->mNumMeshes; ++m) {
+		aiMesh* mesh = scene->mMeshes[m];
+		arena.append(mesh->mNumVertices, (Vector3f*)mesh->mNormals);
+	}
+	normals = std::span(normals.data(), arena.tell<Vector3f>());
+
+	elements = std::span(arena.tell<U32>(), 0);
+	Size vertexCount = 0;
+	for (Size m = 0; m < scene->mNumMeshes; ++m) {
+		aiMesh* mesh = scene->mMeshes[m];
+
+		meshes[m] = std::span(arena.tell<U32>(), 0);
 		for (Size f = 0; f < mesh->mNumFaces; ++f) {
-			aiFace face = mesh->mFaces[f];
+			aiFace& face = mesh->mFaces[f];
 			
-			Face result = {
-				.vertices = {
-					*(Vector3f*)&mesh->mVertices[face.mIndices[0]],
-					*(Vector3f*)&mesh->mVertices[face.mIndices[1]],
-					*(Vector3f*)&mesh->mVertices[face.mIndices[2]],
-				},
-			};
+			U32* elements = arena.reserve<U32>(3);
+
 			for (Size i = 0; i < 3; ++i) {
-				std::swap(result.vertices[i].y, result.vertices[i].z);
-				result.vertices[i].y = -result.vertices[i].y;
+				elements[i] = face.mIndices[i] + vertexCount;
 			}
-			result.normal = *(Vector3f*)&mesh->mNormals[face.mIndices[0]];
-			std::swap(result.normal.y, result.normal.z);
-			result.normal.y = -result.normal.y;
-			result.normal = normalize(result.normal);
-			result.d = dot(result.normal, result.vertices[0]);
-
-			arena.append(1, &result);
 		}
+		meshes[m] = std::span(meshes[m].data(), arena.tell<U32>());
 
-		meshes[m] = std::span(start, arena.tell<Face>());
+		vertexCount += mesh->mNumVertices;
 	}
 
-	faces = std::span(faces.data(), arena.tell<Face>());
+	elements = std::span(elements.data(), arena.tell<U32>());
+	
+	for (Size i = 0; i < vertices.size(); ++i) {
+		std::swap(vertices[i].y, vertices[i].z);
+		vertices[i].y = -vertices[i].y;
+
+		std::swap(normals[i].y, normals[i].z);
+		normals[i].y = -normals[i].y;
+	}
 
 	return 0;
+}
+
+static void convertToFaces(
+	mstd::Arena& arena,
+	std::span<mstd::Vector3f> vertices,
+	std::span<mstd::Vector3f> normals,
+	std::span<mstd::U32> elements,
+	std::span<Face>& faces
+) {
+	using namespace mstd;
+
+	faces = std::span(arena.tell<Face>(), 0);
+	for (Size i = 0; i < elements.size(); i += 3) {
+		Face f = {
+			.vertices = {
+				vertices[elements[i]],
+				vertices[elements[i + 1]],
+				vertices[elements[i + 2]],
+			},
+		};
+
+		f.normal = normals[elements[i]];
+		f.d = dot(f.normal, f.vertices[0]);
+
+		arena.append(1, &f);
+	}
+	faces = std::span(faces.data(), arena.tell<Face>());
 }
 
 static std::span<Face> minkowski(
@@ -144,7 +184,7 @@ static mstd::U32 bestTriangle(const std::span<Face>& faces) {
 	U32 bestTriangle = 0;
 	for (Size i = 0; i < faces.size(); ++i) {
 		U32 balance;
-		U32 splits = countSplits(faces, faces[i], balance);
+		U32 splits = countSplits(faces, (Plane)faces[i], balance);
 		U32 score = balance + splits;
 
 		if (score < lowestScore) {
@@ -484,16 +524,12 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 
 	Arena faceArena((Size)1 << 24);
 
-	std::span<std::span<Face>> meshes;
-	std::span<Face> faces;
+	std::span<std::span<U32>> meshes;
+	std::span<Vector3f> vertices;
+	std::span<Vector3f> normals;
+	std::span<U32> elements;
 
-	if (import(path, faceArena, meshes, faces));
-
-	std::vector<Vector3f> vertices;
-	std::vector<Vector3f> normals;
-	std::vector<U32> indices;
-	/*optimizeTopology(std::span(finalFaces.data(), finalFaces.size()), vertices, normals, indices);*/
-	optimizeTopology(faces, vertices, normals, indices);
+	if (import(path, faceArena, meshes, vertices, normals, elements)) return;
 
 	std::vector<VertexArray::Attribute> attributes = {
 		{
@@ -515,19 +551,21 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 	vertexArray.writeAttributes(0, vertices.data(), vertices.size());
 	vertexArray.writeAttributes(1, normals.data(), normals.size());
 
-	indexCount = indices.size();
-	vertexArray.allocateElements(indexCount * sizeof(U32));
-	vertexArray.writeElements(indices.data(), indices.size());
+	elementCount = elements.size();
+	vertexArray.allocateElements(elements.size_bytes());
+	vertexArray.writeElements(elements.data(), elements.size());
 
 	Size totalSize = 0l;
 	for (Size i = 0; i < meshes.size(); ++i) {
-		totalSize += meshes[i].size_bytes();
+		totalSize += meshes[i].size();
 	}
+	totalSize /= 3;
+	totalSize *= sizeof(Face);
 
 	std::sort(
 		meshes.begin(),
 		meshes.end(),
-		[](std::span<Face> a, std::span<Face> b) {
+		[](std::span<U32> a, std::span<U32> b) {
 			return a.size() < b.size();
 		}
 	);
@@ -549,10 +587,15 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 		{-w, h, w},
 	};
 
-	partition(arena, frontArena, backArena, meshes[0], rootSplit);
+	std::span<Face> faces;
+	convertToFaces(faceArena, vertices, normals, meshes[0], faces);
+
+	partition(arena, frontArena, backArena, faces, rootSplit);
 
 	for (Size m = 1; m < meshes.size(); ++m) {
-		merge(arena, frontArena, backArena, meshes[m], rootSplit);
+		faceArena.truncate(faces.data());
+		convertToFaces(faceArena, vertices, normals, meshes[m], faces);
+		merge(arena, frontArena, backArena, faces, rootSplit);
 	}
 }
 

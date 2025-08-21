@@ -35,7 +35,7 @@ public:
 	void print() const;
 
 	VertexArray vertexArray, minkowski;
-	mstd::U32 indexCount;
+	mstd::U32 elementCount;
 
 private:
 	Node rootSplit;

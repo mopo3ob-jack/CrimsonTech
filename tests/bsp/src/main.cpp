@@ -196,12 +196,12 @@ int main() {
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		glUniform1i(wireframeUniform, 0);
-		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
+		bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
 
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glUniform1i(wireframeUniform, 1);
-		bsp.vertexArray.draw<U32>(bsp.indexCount, 0);
+		bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
 
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
