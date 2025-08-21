@@ -1,2 +1,4 @@
 #include <crimson/game.d/Time.hpp>
+#include <crimson/game.d/Camera.hpp>
+#include <crimson/game.d/FlyCamera.hpp>
 #include <crimson/game.d/Player.hpp>

@@ -34,7 +34,7 @@ public:
 
 	void print() const;
 
-	VertexArray vertexArray;
+	VertexArray vertexArray, minkowski;
 	mstd::U32 indexCount;
 
 private:

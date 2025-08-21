@@ -87,6 +87,13 @@ static mstd::Status import(
 	return 0;
 }
 
+static std::span<Face> minkowski(
+	mstd::Arena& arena,
+	std::span<Face> faces
+) {
+	return {};
+}
+
 static mstd::U32 countSplits(
 	const std::span<Face>& faces,
 	Plane plane,
@@ -475,12 +482,42 @@ static void optimizeTopology(
 void BSP::build(const std::string& path, mstd::Arena& arena) {
 	using namespace mstd;
 
-	Arena bspArena((Size)1 << 24);
+	Arena faceArena((Size)1 << 24);
 
 	std::span<std::span<Face>> meshes;
 	std::span<Face> faces;
 
-	if (import(path, bspArena, meshes, faces)) return;
+	if (import(path, faceArena, meshes, faces));
+
+	std::vector<Vector3f> vertices;
+	std::vector<Vector3f> normals;
+	std::vector<U32> indices;
+	/*optimizeTopology(std::span(finalFaces.data(), finalFaces.size()), vertices, normals, indices);*/
+	optimizeTopology(faces, vertices, normals, indices);
+
+	std::vector<VertexArray::Attribute> attributes = {
+		{
+			.stride = sizeof(Vector3f),
+			.size = 3,
+			.type = GL_FLOAT,
+			.normalized = false,
+		},
+		{
+			.stride = sizeof(Vector3f),
+			.size = 3,
+			.type = GL_FLOAT,
+			.normalized = false,
+		},
+	};
+
+	vertexArray.allocateAttributes(attributes, vertices.size());
+
+	vertexArray.writeAttributes(0, vertices.data(), vertices.size());
+	vertexArray.writeAttributes(1, normals.data(), normals.size());
+
+	indexCount = indices.size();
+	vertexArray.allocateElements(indexCount * sizeof(U32));
+	vertexArray.writeElements(indices.data(), indices.size());
 
 	Size totalSize = 0l;
 	for (Size i = 0; i < meshes.size(); ++i) {
@@ -498,38 +535,25 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 	Arena frontArena(totalSize * 256);
 	Arena backArena(totalSize * 256);
 
-	partition(arena, frontArena, backArena, meshes[0], rootSplit);
-	for (Size i = 1; i < meshes.size(); ++i) {
-		merge(arena, frontArena, backArena, meshes[i], rootSplit);
-	}
-
-	std::vector<Vector3f> vertices;
-	std::vector<Vector3f> normals;
-	std::vector<U32> indices;
-	optimizeTopology(std::span(finalFaces.data(), finalFaces.size()), vertices, normals, indices);
-
-	std::vector<VertexArray::Attribute> attributes = {
-		{
-			.stride = sizeof(Vector3f),
-			.size = 3,
-			.type = GL_FLOAT,
-			.normalized = false,
-		},
-		{
-			.stride = sizeof(Vector3f),
-			.size = 3,
-			.type = GL_FLOAT,
-			.normalized = false,
-		},
+	static constexpr F32 w = 0.125f;
+	static constexpr F32 l = 0.5f;
+	static constexpr F32 h = -0.1f;
+	constexpr Vector3f offsets[] = {
+		{-w, l, -w},
+		{w, l, -w},
+		{w, l, w},
+		{-w, l, w},
+		{-w, h, -w},
+		{w, h, -w},
+		{w, h, w},
+		{-w, h, w},
 	};
-	
-	vertexArray.allocateAttributes(attributes, vertices.size());
-	vertexArray.writeAttributes(0, vertices.data(), vertices.size());
-	vertexArray.writeAttributes(1, normals.data(), normals.size());
 
-	indexCount = indices.size();
-	vertexArray.allocateElements(indices.size() * sizeof(U32));
-	vertexArray.writeElements(indices.data(), indices.size());
+	partition(arena, frontArena, backArena, meshes[0], rootSplit);
+
+	for (Size m = 1; m < meshes.size(); ++m) {
+		merge(arena, frontArena, backArena, meshes[m], rootSplit);
+	}
 }
 
 static mstd::Bool findNode(const BSP::Node& b, const mstd::Vector3f& p, const BSP::Node*& result) {
@@ -556,78 +580,6 @@ mstd::Bool BSP::colliding(const mstd::Vector3f& point) const {
 	const BSP::Node* result;
 	return findNode(rootSplit, point, result);
 }
-
-//mstd::Bool BSP::intersect(
-//	const mstd::Vector3f& from,
-//	const mstd::Vector3f& to,
-//	BSP::Trace& result
-//) const {
-//	return intersect(from, to, result, rootSplit);
-//}
-//
-//mstd::Bool BSP::intersect(
-//	const mstd::Vector3f& from,
-//	const mstd::Vector3f& to,
-//	BSP::Trace& result,
-//	const BSP::Node& node
-//) const {
-//	using namespace mstd;
-//
-//	F32 fromDist = node.value.distance(from);
-//	F32 toDist = node.value.distance(to);
-//
-//	if (fromDist >= 0.0f && toDist >= 0.0f) {
-//		if (node[0]) {
-//			return intersect(from, to, result, *node[0]);
-//		} else {
-//			result.point = to;
-//			return false;
-//		}
-//	}
-//
-//	if (fromDist <= 0.0f && toDist <= 0.0f) {
-//		if (node[1]) {
-//			return intersect(from, to, result, *node[1]);
-//		} else {
-//			return true;
-//		}
-//	}
-//
-//	constexpr F32 EPSILON = 1.0f / 4096.0f;
-//
-//	Bool side = fromDist < 0.0f;
-//	F32 nearT, farT;
-//	Vector3f nearSplit, farSplit;
-//	if (side) {
-//		nearT = (fromDist + EPSILON) / (fromDist - toDist);
-//		farT = (fromDist - EPSILON) / (fromDist - toDist);
-//	} else {
-//		nearT = (fromDist - EPSILON) / (fromDist - toDist);
-//		farT = (fromDist + EPSILON) / (fromDist - toDist);
-//	}
-//
-//	nearT = std::clamp(nearT, 0.0f, 1.0f);
-//	farT = std::clamp(farT, 0.0f, 1.0f);
-//
-//	nearSplit = from + (to - from) * nearT;
-//	farSplit = from + (to - from) * farT;
-//
-//	result.plane = node.value;
-//
-//	if (node[side]) {
-//		if (intersect(from, nearSplit, result, *node[side])) {
-//			return true;
-//		}
-//	}
-//
-//	if (node[side ^ 1]) {
-//		if (intersect(farSplit, to, result, *node[side ^ 1])) {
-//			return true;
-//		}
-//	}
-//
-//	return false;
-//}
 
 mstd::Bool BSP::isSolid(const mstd::Vector3f& point, const Node* node) const {
 	using namespace mstd;
@@ -679,7 +631,7 @@ mstd::Bool BSP::clip(
 		}
 	}
 
-	if (fromDist <= 0.0f && toDist <= 0.0f) {
+	if (fromDist < 0.0f && toDist < 0.0f) {
 		if (node[1]) {
 			return clip(from, to, result, *node[1]);
 		} else {
@@ -691,26 +643,30 @@ mstd::Bool BSP::clip(
 	constexpr F32 EPSILON = 1.0f / 4096.0f;
 
 	Bool side = fromDist < 0.0f;
-	F32 t;
+	F32 nearT, farT;
 	if (side) {
-		t = (fromDist + EPSILON) / (fromDist - toDist);
+		nearT = (fromDist + EPSILON) / (fromDist - toDist);
+		farT = (fromDist - EPSILON) / (fromDist - toDist);
 	} else {
-		t = (fromDist - EPSILON) / (fromDist - toDist);
+		nearT = (fromDist - EPSILON) / (fromDist - toDist);
+		farT = (fromDist + EPSILON) / (fromDist - toDist);
 	}
 
-	t = std::clamp(t, 0.0f, 1.0f);
+	nearT = std::clamp(nearT, 0.0f, 1.0f);
+	farT = std::clamp(farT, 0.0f, 1.0f);
 
-	Vector3f split = from + (to - from) * t;
+	Vector3f nearSplit = from + (to - from) * nearT;
+	Vector3f farSplit = from + (to - from) * farT;
 
 	if (node[side]) {
-		if (clip(from, split, result, *node[side])) {
+		if (clip(from, nearSplit, result, *node[side])) {
 			return true;
 		}
 	}
 
 	if (node[side ^ 1]) {
-		if (!isSolid(split, node[side ^ 1])) {
-			return clip(split, to, result, *node[side ^ 1]);
+		if (!isSolid(farSplit, node[side ^ 1])) {
+			return clip(farSplit, to, result, *node[side ^ 1]);
 		}
 	}
 
@@ -719,7 +675,7 @@ mstd::Bool BSP::clip(
 		return false;
 	} else {
 		result.plane = node.value;
-		result.point = split;
+		result.point = nearSplit;
 		return true;
 	}
 }

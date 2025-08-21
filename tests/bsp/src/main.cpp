@@ -31,30 +31,6 @@ static void resize(GLFWwindow* window, int width, int height) {
 	projectionMatrix = perspective(F32(width) / F32(height), F32(M_PI_2), 0.01f, 100.0f);
 }
 
-static Matrix4f rotateX(F32 angle) {
-	F32 cosA = std::cos(angle);
-	F32 sinA = std::sin(angle);
-
-	return Matrix4f(
-		{1,  0,    0,     0},
-		{0,  cosA, -sinA, 0},
-		{0,  sinA, cosA,  0},
-		{0,  0,    0,     1}
-	);
-}
-
-static Matrix4f rotateY(F32 angle) {
-	F32 cosA = std::cos(angle);
-	F32 sinA = std::sin(angle);
-
-	return Matrix4f(
-		{cosA,  0, sinA,  0},
-		{0,     1, 0,     0},
-		{-sinA, 0, cosA,  0},
-		{0,     0, 0,     1}
-	);
-}
-
 int main() {
 	glfwInit();
 
@@ -123,117 +99,9 @@ int main() {
 	BSP bsp;
 	bsp.build("resources/models/room.fbx", arena);
 
-	std::vector<VertexArray::Attribute> vertexAttributes = {
-		{
-			.stride = sizeof(Vector3f),
-			.size = 3,
-			.type = GL_FLOAT,
-			.normalized = GL_FALSE
-		},
-		{
-			.stride = sizeof(Vector3f),
-			.size = 3,
-			.type = GL_FLOAT,
-			.normalized = GL_FALSE
-		},
-	};
-
-	Vector3f vertices[] = {
-		{1.0f, -1.0f, 1.0f},
-		{-1.0f, -1.0f, 1.0f},
-		{-1.0f, 1.0f, 1.0f},
-		{1.0f, 1.0f, 1.0f},
-
-		{-1.0f, -1.0f, -1.0f},
-		{1.0f, -1.0f, -1.0f},
-		{1.0f, 1.0f, -1.0f},
-		{-1.0f, 1.0f, -1.0f},
-
-		{1.0f, -1.0f, -1.0f},
-		{1.0f, -1.0f, 1.0f},
-		{1.0f, 1.0f, 1.0f},
-		{1.0f, 1.0f, -1.0f},
-
-		{-1.0f, -1.0f, 1.0f},
-		{-1.0f, -1.0f, -1.0f},
-		{-1.0f, 1.0f, -1.0f},
-		{-1.0f, 1.0f, 1.0f},
-
-		{-1.0f, 1.0f, -1.0f},
-		{1.0f, 1.0f, -1.0f},
-		{1.0f, 1.0f, 1.0f},
-		{-1.0f, 1.0f, 1.0f},
-
-		{1.0f, -1.0f, -1.0f},
-		{-1.0f, -1.0f, -1.0f},
-		{-1.0f, -1.0f, 1.0f},
-		{1.0f, -1.0f, 1.0f},
-	};
-
-	Vector3f normals[] = {
-		{0.0, 0.0, 1.0},
-		{0.0, 0.0, 1.0},
-		{0.0, 0.0, 1.0},
-		{0.0, 0.0, 1.0},
-
-		{0.0, 0.0, -1.0},
-		{0.0, 0.0, -1.0},
-		{0.0, 0.0, -1.0},
-		{0.0, 0.0, -1.0},
-
-		{1.0, 0.0, 0.0},
-		{1.0, 0.0, 0.0},
-		{1.0, 0.0, 0.0},
-		{1.0, 0.0, 0.0},
-
-		{-1.0, 0.0, 0.0},
-		{-1.0, 0.0, 0.0},
-		{-1.0, 0.0, 0.0},
-		{-1.0, 0.0, 0.0},
-
-		{0.0, 1.0, 0.0},
-		{0.0, 1.0, 0.0},
-		{0.0, 1.0, 0.0},
-		{0.0, 1.0, 0.0},
-
-		{0.0, -1.0, 0.0},
-		{0.0, -1.0, 0.0},
-		{0.0, -1.0, 0.0},
-		{0.0, -1.0, 0.0},
-	};
-
-	U16 indices[] = {
-		0, 1, 2,
-		0, 2, 3,
-
-		4, 5, 6,
-		4, 6, 7,
-
-		8, 9, 10,
-		8, 10, 11,
-
-		12, 13, 14,
-		12, 14, 15,
-
-		16, 17, 18,
-		16, 18, 19,
-
-		20, 21, 22,
-		20, 22, 23,
-	};
-	
-	VertexArray vertexArray;
-
-	vertexArray.allocateAttributes(vertexAttributes, sizeof(vertices) / sizeof(Vector3f));
-	vertexArray.writeAttributes(0, vertices, sizeof(vertices) / sizeof(Vector3f));
-	vertexArray.writeAttributes(1, normals, sizeof(normals) / sizeof(Vector3f));
-
-	vertexArray.allocateElements(sizeof(indices));
-	vertexArray.writeElements(indices, sizeof(indices) / sizeof(U16));
-
-	Player player;
-	player.position = Vector3f(0.0f, 3.0f, 0.0f);
-	player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
+	FlyCamera player;
+	player.position = Vector3f(0.0f, 2.0f, 1.5f);
+	//player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
 	player.angle = Vector3f(0.0f);
 
 	Vector2d prevMousePosition;
@@ -273,8 +141,8 @@ int main() {
 		glfwGetCursorPos(window, &mousePosition.x, &mousePosition.y);
 		if (!cursorEnabled) {
 			mouseDelta = mousePosition - prevMousePosition;
-			player.angle.x += mouseDelta.y * sensitivity.y / F32(mode->height);
-			player.angle.y += mouseDelta.x * sensitivity.x / F32(mode->height);
+			player.angle.x -= mouseDelta.y * sensitivity.y / F32(mode->height);
+			player.angle.y -= mouseDelta.x * sensitivity.x / F32(mode->height);
 
 			player.angle.x = std::clamp(player.angle.x, F32(-M_PI_2), F32(M_PI_2));
 		}
@@ -297,32 +165,24 @@ int main() {
 			player.keyMask |= player.LEFT;
 		}
 		
-		if (glfwGetKey(window, GLFW_KEY_SPACE)) {
-			player.keyMask |= player.JUMP;
+		if (glfwGetKey(window, GLFW_KEY_E)) {
+			player.keyMask |= player.UP;
+		}
+
+		if (glfwGetKey(window, GLFW_KEY_Q)) {
+			player.keyMask |= player.DOWN;
 		}
 		
 		player.update(bsp);
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		Matrix4f rotationMatrix = 
-			rotateX(Time::time)
-			* rotateY(Time::time);
-
+		Matrix4f rotationMatrix = Matrix4f(1.0f);
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 
-		Matrix4f cameraMatrix = 
-			projectionMatrix
-			* rotateX(player.angle.x)
-			* rotateY(player.angle.y)
-			* translate(-player.position);
+		Matrix4f cameraMatrix = projectionMatrix * player.viewMatrix;
 
 		shader.use();
-
-		glUniformMatrix4fv(objectUniform, 1, GL_FALSE, (GLfloat*)&objectMatrix);
-		glUniformMatrix4fv(rotationUniform, 1, GL_FALSE, (GLfloat*)&rotationMatrix);
-		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
-		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&player.position);
 
 		rotationMatrix = rotateX(0.0f);
 
