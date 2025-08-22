@@ -133,7 +133,8 @@ static mstd::Size searchForVertex(std::span<mstd::Vector3f> vertices, mstd::Vect
 }
 
 static void convertToMinkowski(
-	mstd::Arena& arena,
+	mstd::Arena& vertexArena,
+	mstd::Arena& faceArena,
 	std::span<mstd::Vector3f> vertices,
 	std::span<mstd::Vector3f> normals,
 	std::span<mstd::U32> elements,
@@ -142,32 +143,29 @@ static void convertToMinkowski(
 ) {
 	using namespace mstd;
 
-	std::vector<IndexedFace> tempFaces;
-
-	resultVertices = std::span(arena.tell<Vector3f>(), 0);
+	resultVertices = std::span(vertexArena.tell<Vector3f>(), 0);
+	resultFaces = std::span(faceArena.reserve<IndexedFace>(elements.size() / 3), elements.size() / 3);
 	for (Size e = 0; e < elements.size(); e += 3) {
-		IndexedFace face;
+		IndexedFace& face = resultFaces[e / 3];
 
 		for (Size i = 0; i < 3; ++i) {
 			Vector3f v = vertices[elements[e + i]];
 
 			Size searchIndex = searchForVertex(resultVertices, v);
 			if (searchIndex == resultVertices.size()) {
-				arena.append(1, &v);
+				vertexArena.append(1, &v);
 			}
 
 			face.vertices[i] = searchIndex;
 		}
 
-		resultVertices = std::span(resultVertices.data(), arena.tell<Vector3f>());
+		resultVertices = std::span(resultVertices.data(), vertexArena.tell<Vector3f>());
 
 		face.normal = normals[elements[e]];
 		face.d = dot(face.normal, resultVertices[face.vertices[0]]);
-
-		tempFaces.push_back(face);
 	}
 
-	resultFaces = std::span(arena.append(tempFaces.size(), tempFaces.data()), tempFaces.size());
+	resultFaces = std::span(resultFaces.data(), faceArena.tell<IndexedFace>());
 }
 
 static void convertToFaces(
@@ -192,6 +190,7 @@ static void convertToFaces(
 
 //static void minkowskiSum(
 //	mstd::Arena& arena,
+//	std::span<mstd::Vector3f> vertices,
 //	std::span<IndexedFace>& faces
 //) {
 //	using namespace mstd;
@@ -646,9 +645,6 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 		}
 	);
 
-	Arena frontArena(totalSize * 256);
-	Arena backArena(totalSize * 256);
-
 	static constexpr F32 w = 0.125f;
 	static constexpr F32 l = 0.5f;
 	static constexpr F32 h = -0.1f;
@@ -663,18 +659,22 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 		{-w, h, w},
 	};
 
+	Arena vertexArena(vertices.size() * 16);
 	std::span<Vector3f> minkowskiVertices;
 	std::span<IndexedFace> minkowskiFaces;
-	convertToMinkowski(faceArena, vertices, normals, meshes[0], minkowskiVertices, minkowskiFaces);
+	convertToMinkowski(vertexArena, faceArena, vertices, normals, meshes[0], minkowskiVertices, minkowskiFaces);
 
 	std::span<Face> faces;
 	convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
 
+	Arena frontArena(totalSize * 256);
+	Arena backArena(totalSize * 256);
 	partition(arena, frontArena, backArena, faces, rootSplit);
 
 	for (Size m = 1; m < meshes.size(); ++m) {
-		faceArena.truncate(minkowskiVertices.data());
-		convertToMinkowski(faceArena, vertices, normals, meshes[m], minkowskiVertices, minkowskiFaces);
+		vertexArena.truncate(minkowskiVertices.data());
+		faceArena.truncate(minkowskiFaces.data());
+		convertToMinkowski(vertexArena, faceArena, vertices, normals, meshes[m], minkowskiVertices, minkowskiFaces);
 		convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
 		merge(arena, frontArena, backArena, faces, rootSplit);
 	}
