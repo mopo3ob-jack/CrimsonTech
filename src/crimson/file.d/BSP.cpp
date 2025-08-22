@@ -15,9 +15,8 @@
 
 namespace ct {
 
-struct IndirectFace : Plane {
-	using P = mstd::Vector3f*;
-	P vertices[3];
+struct IndexedFace : Plane {
+	mstd::Size vertices[3];
 };
 
 struct Face : Plane {
@@ -139,32 +138,31 @@ static void convertToMinkowski(
 	std::span<mstd::Vector3f> normals,
 	std::span<mstd::U32> elements,
 	std::span<mstd::Vector3f>& resultVertices,
-	std::span<IndirectFace>& resultFaces
+	std::span<IndexedFace>& resultFaces
 ) {
 	using namespace mstd;
 
-	std::vector<IndirectFace> tempFaces;
+	std::vector<IndexedFace> tempFaces;
 
 	resultVertices = std::span(arena.tell<Vector3f>(), 0);
 	for (Size e = 0; e < elements.size(); e += 3) {
-		IndirectFace face;
+		IndexedFace face;
 
 		for (Size i = 0; i < 3; ++i) {
 			Vector3f v = vertices[elements[e + i]];
 
 			Size searchIndex = searchForVertex(resultVertices, v);
-			Vector3f* search = resultVertices.data() + searchIndex;
 			if (searchIndex == resultVertices.size()) {
 				arena.append(1, &v);
 			}
 
-			face.vertices[i] = search;
+			face.vertices[i] = searchIndex;
 		}
 
 		resultVertices = std::span(resultVertices.data(), arena.tell<Vector3f>());
 
 		face.normal = normals[elements[e]];
-		face.d = dot(face.normal, *face.vertices[0]);
+		face.d = dot(face.normal, resultVertices[face.vertices[0]]);
 
 		tempFaces.push_back(face);
 	}
@@ -174,7 +172,8 @@ static void convertToMinkowski(
 
 static void convertToFaces(
 	mstd::Arena& arena,
-	std::span<IndirectFace> faces,
+	std::span<mstd::Vector3f> vertices,
+	std::span<IndexedFace> faces,
 	std::span<Face>& resultFaces
 ) {
 	using namespace mstd;
@@ -183,7 +182,7 @@ static void convertToFaces(
 
 	for (Size f = 0; f < faces.size(); ++f) {
 		for (Size i = 0; i < 3; ++i) {
-			resultFaces[f].vertices[i] = *faces[f].vertices[i];
+			resultFaces[f].vertices[i] = vertices[faces[f].vertices[i]];
 		}
 
 		resultFaces[f].normal = faces[f].normal;
@@ -191,24 +190,24 @@ static void convertToFaces(
 	}
 }
 
-static void minkowskiSum(
-	mstd::Arena& arena,
-	std::span<Face>& faces
-) {
-	using namespace mstd;
-
-	for (Size f = 0; f < faces.size(); ++f) {
-		Face& face = faces[f];
-		
-		face.vertices[0] += face.normal * 0.5f;
-		face.vertices[1] += face.normal * 0.5f;
-		face.vertices[2] += face.normal * 0.5f;
-
-		face.d = dot(face.normal, face.vertices[0]);
-	}
-
-	return;
-}
+//static void minkowskiSum(
+//	mstd::Arena& arena,
+//	std::span<IndexedFace>& faces
+//) {
+//	using namespace mstd;
+//
+//	for (Size f = 0; f < faces.size(); ++f) {
+//		IndexedFace& face = faces[f];
+//		
+//		face.vertices[0] += face.normal * 0.5f;
+//		face.vertices[1] += face.normal * 0.5f;
+//		face.vertices[2] += face.normal * 0.5f;
+//
+//		face.d = dot(face.normal, face.vertices[0]);
+//	}
+//
+//	return;
+//}
 
 static mstd::U32 countSplits(
 	const std::span<Face>& faces,
@@ -665,18 +664,18 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 	};
 
 	std::span<Vector3f> minkowskiVertices;
-	std::span<IndirectFace> minkowskiFaces;
+	std::span<IndexedFace> minkowskiFaces;
 	convertToMinkowski(faceArena, vertices, normals, meshes[0], minkowskiVertices, minkowskiFaces);
 
 	std::span<Face> faces;
-	convertToFaces(faceArena, minkowskiFaces, faces);
+	convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
 
 	partition(arena, frontArena, backArena, faces, rootSplit);
 
 	for (Size m = 1; m < meshes.size(); ++m) {
 		faceArena.truncate(minkowskiVertices.data());
 		convertToMinkowski(faceArena, vertices, normals, meshes[m], minkowskiVertices, minkowskiFaces);
-		convertToFaces(faceArena, minkowskiFaces, faces);
+		convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
 		merge(arena, frontArena, backArena, faces, rootSplit);
 	}
 }
