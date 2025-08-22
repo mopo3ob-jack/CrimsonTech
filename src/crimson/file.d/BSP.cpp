@@ -15,6 +15,11 @@
 
 namespace ct {
 
+struct IndirectFace : Plane {
+	using P = mstd::Vector3f*;
+	P vertices[3];
+};
+
 struct Face : Plane {
 	mstd::Vector3f vertices[3];
 };
@@ -100,38 +105,109 @@ static mstd::Status import(
 	return 0;
 }
 
-static void convertToFaces(
+static mstd::Size searchForVertex(std::span<mstd::Vector3f> vertices, mstd::Vector3f search) {
+	using namespace mstd;
+	
+	constexpr F32 EPSILON = 1.0f / 4096.0f;
+
+	constexpr auto isEqual = [](F32 x) {
+		return x >= -EPSILON && x <= EPSILON;
+	};
+
+	for (Size i = 0; i < vertices.size(); ++i) {
+		if (!isEqual(vertices[i].x - search.x)) {
+			continue;
+		}
+
+		if (!isEqual(vertices[i].y - search.y)) {
+			continue;
+		}
+
+		if (!isEqual(vertices[i].z - search.z)) {
+			continue;
+		}
+
+		return i;
+	}
+
+	return vertices.size();
+}
+
+static void convertToMinkowski(
 	mstd::Arena& arena,
 	std::span<mstd::Vector3f> vertices,
 	std::span<mstd::Vector3f> normals,
 	std::span<mstd::U32> elements,
+	std::span<mstd::Vector3f>& resultVertices,
+	std::span<IndirectFace>& resultFaces
+) {
+	using namespace mstd;
+
+	std::vector<IndirectFace> tempFaces;
+
+	resultVertices = std::span(arena.tell<Vector3f>(), 0);
+	for (Size e = 0; e < elements.size(); e += 3) {
+		IndirectFace face;
+
+		for (Size i = 0; i < 3; ++i) {
+			Vector3f v = vertices[elements[e + i]];
+
+			Size searchIndex = searchForVertex(resultVertices, v);
+			Vector3f* search = resultVertices.data() + searchIndex;
+			if (searchIndex == resultVertices.size()) {
+				arena.append(1, &v);
+			}
+
+			face.vertices[i] = search;
+		}
+
+		resultVertices = std::span(resultVertices.data(), arena.tell<Vector3f>());
+
+		face.normal = normals[elements[e]];
+		face.d = dot(face.normal, *face.vertices[0]);
+
+		tempFaces.push_back(face);
+	}
+
+	resultFaces = std::span(arena.append(tempFaces.size(), tempFaces.data()), tempFaces.size());
+}
+
+static void convertToFaces(
+	mstd::Arena& arena,
+	std::span<IndirectFace> faces,
+	std::span<Face>& resultFaces
+) {
+	using namespace mstd;
+
+	resultFaces = std::span(arena.reserve<Face>(faces.size()), faces.size());
+
+	for (Size f = 0; f < faces.size(); ++f) {
+		for (Size i = 0; i < 3; ++i) {
+			resultFaces[f].vertices[i] = *faces[f].vertices[i];
+		}
+
+		resultFaces[f].normal = faces[f].normal;
+		resultFaces[f].d = faces[f].d;
+	}
+}
+
+static void minkowskiSum(
+	mstd::Arena& arena,
 	std::span<Face>& faces
 ) {
 	using namespace mstd;
 
-	faces = std::span(arena.tell<Face>(), 0);
-	for (Size i = 0; i < elements.size(); i += 3) {
-		Face f = {
-			.vertices = {
-				vertices[elements[i]],
-				vertices[elements[i + 1]],
-				vertices[elements[i + 2]],
-			},
-		};
+	for (Size f = 0; f < faces.size(); ++f) {
+		Face& face = faces[f];
+		
+		face.vertices[0] += face.normal * 0.5f;
+		face.vertices[1] += face.normal * 0.5f;
+		face.vertices[2] += face.normal * 0.5f;
 
-		f.normal = normals[elements[i]];
-		f.d = dot(f.normal, f.vertices[0]);
-
-		arena.append(1, &f);
+		face.d = dot(face.normal, face.vertices[0]);
 	}
-	faces = std::span(faces.data(), arena.tell<Face>());
-}
 
-static std::span<Face> minkowski(
-	mstd::Arena& arena,
-	std::span<Face> faces
-) {
-	return {};
+	return;
 }
 
 static mstd::U32 countSplits(
@@ -184,7 +260,8 @@ static mstd::U32 bestTriangle(const std::span<Face>& faces) {
 	U32 bestTriangle = 0;
 	for (Size i = 0; i < faces.size(); ++i) {
 		U32 balance;
-		U32 splits = countSplits(faces, (Plane)faces[i], balance);
+		Plane p = faces[i];
+		U32 splits = countSplits(faces, p, balance);
 		U32 score = balance + splits;
 
 		if (score < lowestScore) {
@@ -587,14 +664,19 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 		{-w, h, w},
 	};
 
+	std::span<Vector3f> minkowskiVertices;
+	std::span<IndirectFace> minkowskiFaces;
+	convertToMinkowski(faceArena, vertices, normals, meshes[0], minkowskiVertices, minkowskiFaces);
+
 	std::span<Face> faces;
-	convertToFaces(faceArena, vertices, normals, meshes[0], faces);
+	convertToFaces(faceArena, minkowskiFaces, faces);
 
 	partition(arena, frontArena, backArena, faces, rootSplit);
 
 	for (Size m = 1; m < meshes.size(); ++m) {
-		faceArena.truncate(faces.data());
-		convertToFaces(faceArena, vertices, normals, meshes[m], faces);
+		faceArena.truncate(minkowskiVertices.data());
+		convertToMinkowski(faceArena, vertices, normals, meshes[m], minkowskiVertices, minkowskiFaces);
+		convertToFaces(faceArena, minkowskiFaces, faces);
 		merge(arena, frontArena, backArena, faces, rootSplit);
 	}
 }
