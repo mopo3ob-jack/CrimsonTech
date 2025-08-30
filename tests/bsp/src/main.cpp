@@ -38,6 +38,8 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+	glfwWindowHint(GLFW_SAMPLES, 4);
+
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "BSP", monitor, nullptr);
@@ -80,7 +82,8 @@ int main() {
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 	//glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);  
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_MULTISAMPLE);
 
 	Shader::CreateInfo createInfo = {
 		.vertexPath = "resources/shaders/shader.vert",
@@ -99,8 +102,8 @@ int main() {
 	BSP bsp;
 	bsp.build("resources/models/room.fbx", arena);
 
-	FlyCamera player;
-	player.position = Vector3f(0.0f, 2.0f, 1.5f);
+	Player player;
+	player.position = Vector3f(0.0f, 1.26f, 1.2f);
 	//player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
 	player.angle = Vector3f(0.0f);
 
@@ -165,12 +168,16 @@ int main() {
 			player.keyMask |= player.LEFT;
 		}
 		
-		if (glfwGetKey(window, GLFW_KEY_E)) {
+		/*if (glfwGetKey(window, GLFW_KEY_E)) {
 			player.keyMask |= player.UP;
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_Q)) {
 			player.keyMask |= player.DOWN;
+		}*/
+		
+		if (glfwGetKey(window, GLFW_KEY_SPACE)) {
+			player.keyMask |= player.JUMP;
 		}
 		
 		player.update(bsp);

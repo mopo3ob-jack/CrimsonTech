@@ -8,6 +8,7 @@
 #include <array>
 #include <span>
 #include <optional>
+#include <bitset>
 
 #include <cassert>
 
@@ -153,13 +154,11 @@ static void convertToMinkowski(
 
 			Size searchIndex = searchForVertex(resultVertices, v);
 			if (searchIndex == resultVertices.size()) {
-				vertexArena.append(1, &v);
+				resultVertices = std::span(resultVertices.data(), vertexArena.append(1, &v) + 1);
 			}
 
 			face.vertices[i] = searchIndex;
 		}
-
-		resultVertices = std::span(resultVertices.data(), vertexArena.tell<Vector3f>());
 
 		face.normal = normals[elements[e]];
 		face.d = dot(face.normal, resultVertices[face.vertices[0]]);
@@ -188,25 +187,79 @@ static void convertToFaces(
 	}
 }
 
-//static void minkowskiSum(
-//	mstd::Arena& arena,
-//	std::span<mstd::Vector3f> vertices,
-//	std::span<IndexedFace>& faces
-//) {
-//	using namespace mstd;
-//
-//	for (Size f = 0; f < faces.size(); ++f) {
-//		IndexedFace& face = faces[f];
-//		
-//		face.vertices[0] += face.normal * 0.5f;
-//		face.vertices[1] += face.normal * 0.5f;
-//		face.vertices[2] += face.normal * 0.5f;
-//
-//		face.d = dot(face.normal, face.vertices[0]);
-//	}
-//
-//	return;
-//}
+static void minkowskiSum(
+	mstd::Arena& vertexArena,
+	mstd::Arena& faceArena,
+	std::span<mstd::Vector3f>&  vertices,
+	std::span<IndexedFace>& faces
+) {
+	using namespace mstd;
+
+	static constexpr F32 w = 0.125f;
+	static constexpr F32 l = 1.25f;
+	static constexpr F32 h = 0.25f;
+	constexpr Vector3f minAABB(-w, -l, -w);
+	constexpr Vector3f maxAABB(w, h, w);
+
+	constexpr F32 ONE = 1.0f -  1.0f / 4096.0f;
+
+	std::vector<U8> directions;
+	directions.resize(vertices.size());
+
+	std::cout << "BEFORE" << std::endl;
+	for (Size v = 0; v < vertices.size(); ++v) {
+		std::cout << std::string(vertices[v]) << std::endl;
+	}
+
+	std::cout << "MASKS AND NORMALS" << std::endl;
+
+	for (Size f = 0; f < faces.size(); ++f) {
+		const IndexedFace face = faces[f];
+	
+		U8 directionMask = 0;
+		for (Size b = 0; b < 3; ++b) {
+			directionMask <<= 2;
+			if (face.normal[b] >= ONE) {
+				directionMask |= 0b01;
+			} else if (face.normal[b] <= -ONE) {
+				directionMask |= 0b10;
+			}
+		}
+
+		for (Size v = 0; v < 3; ++v) {
+			Vector3f& vertex = vertices[face.vertices[v]];
+			U8 y = directionMask;
+			U8 n = directions[face.vertices[v]];
+
+			for (I32 b = 2; b >= 0; --b) {
+				if (y & 0b01 && !(n & 0b01)) {
+					vertex[b] -= minAABB[b];
+				}
+				if (y & 0b10 && !(n & 0b10)) {
+					vertex[b] -= maxAABB[b];
+				}
+
+				y >>= 2;
+				n >>= 2;
+			}
+			directions[face.vertices[v]] |= directionMask;
+		}
+	}
+
+	std::cout << "AFTER" << std::endl;
+	for (Size v = 0; v < vertices.size(); ++v) {
+		std::cout << std::string(vertices[v]) << std::endl;
+	}
+
+	for (Size f = 0; f < faces.size(); ++f) {
+		//Vector3f a = vertices[faces[f].vertices[2]] - vertices[faces[f].vertices[0]];
+		//Vector3f b = vertices[faces[f].vertices[1]] - vertices[faces[f].vertices[0]];
+		//faces[f].normal = normalize(cross(a, b));
+		faces[f].d = dot(vertices[faces[f].vertices[0]], faces[f].normal);
+	}
+
+	return;
+}
 
 static mstd::U32 countSplits(
 	const std::span<Face>& faces,
@@ -645,24 +698,12 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 		}
 	);
 
-	static constexpr F32 w = 0.125f;
-	static constexpr F32 l = 0.5f;
-	static constexpr F32 h = -0.1f;
-	constexpr Vector3f offsets[] = {
-		{-w, l, -w},
-		{w, l, -w},
-		{w, l, w},
-		{-w, l, w},
-		{-w, h, -w},
-		{w, h, -w},
-		{w, h, w},
-		{-w, h, w},
-	};
-
 	Arena vertexArena(vertices.size() * 16);
 	std::span<Vector3f> minkowskiVertices;
 	std::span<IndexedFace> minkowskiFaces;
 	convertToMinkowski(vertexArena, faceArena, vertices, normals, meshes[0], minkowskiVertices, minkowskiFaces);
+
+	minkowskiSum(vertexArena, faceArena, minkowskiVertices, minkowskiFaces);
 
 	std::span<Face> faces;
 	convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
@@ -675,6 +716,7 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 		vertexArena.truncate(minkowskiVertices.data());
 		faceArena.truncate(minkowskiFaces.data());
 		convertToMinkowski(vertexArena, faceArena, vertices, normals, meshes[m], minkowskiVertices, minkowskiFaces);
+		minkowskiSum(vertexArena, faceArena, minkowskiVertices, minkowskiFaces);
 		convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
 		merge(arena, frontArena, backArena, faces, rootSplit);
 	}

@@ -78,6 +78,8 @@ void Player::update(BSP& bsp) {
 
 	velocity.x = hVelocity.x;
 	velocity.z = hVelocity.z;
+
+	Camera::update();
 }
 
 }

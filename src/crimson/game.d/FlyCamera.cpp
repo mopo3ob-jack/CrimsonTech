@@ -9,8 +9,6 @@ void FlyCamera::update(BSP& bsp) {
 
 	constexpr F32 maxVelocity = 3.0f;
 
-	Camera::update();
-
 	Vector3f velocity(0.0f);
 	if (keyMask & FORWARD) {
 		velocity += Vector3f(viewMatrix[0].z, viewMatrix[1].z, viewMatrix[2].z);
@@ -49,6 +47,8 @@ void FlyCamera::update(BSP& bsp) {
 		velocity -= result.plane.normal * dot(result.plane.normal, velocity);
 	}
 	position = result.point;
+
+	Camera::update();
 }
 
 }
