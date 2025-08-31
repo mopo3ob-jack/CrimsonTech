@@ -103,7 +103,7 @@ int main() {
 	bsp.build("resources/models/room.fbx", arena);
 
 	Player player;
-	player.position = Vector3f(0.0f, 1.26f, 1.2f);
+	player.position = Vector3f(0.0f, 1.0f, 1.5f);
 	//player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
 	player.angle = Vector3f(0.0f);
 
@@ -144,8 +144,8 @@ int main() {
 		glfwGetCursorPos(window, &mousePosition.x, &mousePosition.y);
 		if (!cursorEnabled) {
 			mouseDelta = mousePosition - prevMousePosition;
-			player.angle.x -= mouseDelta.y * sensitivity.y / F32(mode->height);
-			player.angle.y -= mouseDelta.x * sensitivity.x / F32(mode->height);
+			player.angle.x += mouseDelta.y * sensitivity.y / F32(mode->height);
+			player.angle.z += mouseDelta.x * sensitivity.x / F32(mode->height);
 
 			player.angle.x = std::clamp(player.angle.x, F32(-M_PI_2), F32(M_PI_2));
 		}
@@ -205,10 +205,10 @@ int main() {
 		glUniform1i(wireframeUniform, 0);
 		bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
 
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		glClear(GL_DEPTH_BUFFER_BIT);
-		glUniform1i(wireframeUniform, 1);
-		bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		//glClear(GL_DEPTH_BUFFER_BIT);
+		//glUniform1i(wireframeUniform, 1);
+		//bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
 
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

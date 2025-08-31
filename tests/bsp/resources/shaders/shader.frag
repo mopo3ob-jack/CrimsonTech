@@ -14,7 +14,7 @@ float specular = 0.2f;
 
 vec3 lightColor = vec3(0.0f, 1.0f, 0.0f);
 
-vec3 lightPosition = vec3(0.0, 1.0, -1.0);
+vec3 lightPosition = vec3(0.0, 1.0, 1.0);
 
 void main() {
 	lightColor = abs(f_normal);

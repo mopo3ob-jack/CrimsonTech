@@ -39,7 +39,6 @@ static mstd::Status import(
 	const aiScene* scene = importer.ReadFile(
 		path,
 		aiProcess_CalcTangentSpace |
-		aiProcess_MakeLeftHanded |
 		aiProcess_JoinIdenticalVertices |
 		aiProcess_Triangulate
 	);
@@ -93,14 +92,6 @@ static mstd::Status import(
 	}
 
 	elements = std::span(elements.data(), arena.tell<U32>());
-	
-	for (Size i = 0; i < vertices.size(); ++i) {
-		std::swap(vertices[i].y, vertices[i].z);
-		vertices[i].y = -vertices[i].y;
-
-		std::swap(normals[i].y, normals[i].z);
-		normals[i].y = -normals[i].y;
-	}
 
 	return 0;
 }
@@ -196,12 +187,13 @@ static void minkowskiSum(
 	using namespace mstd;
 
 	static constexpr F32 w = 0.125f;
-	static constexpr F32 l = 1.25f;
+	static constexpr F32 l = 1.5f;
 	static constexpr F32 h = 0.25f;
-	constexpr Vector3f minAABB(-w, -l, -w);
-	constexpr Vector3f maxAABB(w, h, w);
+	constexpr Vector3f minAABB(-w, -w, -l);
+	constexpr Vector3f maxAABB(w, w, h);
 
-	constexpr F32 ONE = 1.0f -  1.0f / 4096.0f;
+	constexpr F32 EPSILON = 1.0f / 4096.0f;
+	constexpr F32 ONE = 1.0f - EPSILON;
 
 	std::vector<U8> directions;
 	directions.resize(vertices.size());
@@ -219,9 +211,9 @@ static void minkowskiSum(
 		U8 directionMask = 0;
 		for (Size b = 0; b < 3; ++b) {
 			directionMask <<= 2;
-			if (face.normal[b] >= ONE) {
+			if (face.normal[b] >= EPSILON) {
 				directionMask |= 0b01;
-			} else if (face.normal[b] <= -ONE) {
+			} else if (face.normal[b] <= -EPSILON) {
 				directionMask |= 0b10;
 			}
 		}

@@ -7,27 +7,27 @@ void Player::update(BSP& bsp) {
 	using namespace ct;
 
 	constexpr F32 gravity = -9.81f;
-	constexpr F32 frictionCoefficient = 1.7f;
-	constexpr F32 dragCoefficient = 0.425f;
-	constexpr F32 groundAcceleration = 40.0f;
+	constexpr F32 frictionCoefficient = 2.0f;
+	constexpr F32 drag = -10.0f;
+	constexpr F32 groundAcceleration = 60.0f;
 	constexpr F32 airAcceleration = 10.0f;
-	constexpr F32 maxVelocity = 6.0f;
+	constexpr F32 maxVelocity = 5.0f;
 
 	Vector3f acceleration = Vector3f(0.0f);
 	if (keyMask & FORWARD) {
-		acceleration += Vector3f(std::sin(angle.y), 0.0f, std::cos(angle.y));
+		acceleration += Vector3f(viewMatrix[0].y, viewMatrix[1].y, 0.0f);
 	}
 
 	if (keyMask & BACKWARD) {
-		acceleration -= Vector3f(std::sin(angle.y), 0.0f, std::cos(angle.y));
+		acceleration -= Vector3f(viewMatrix[0].y, viewMatrix[1].y, 0.0f);
 	}
 
 	if (keyMask & RIGHT) {
-		acceleration += Vector3f(std::cos(angle.y), 0.0f, -std::sin(angle.y));
+		acceleration += Vector3f(viewMatrix[0].x, viewMatrix[1].x, 0.0f);
 	}
 
 	if (keyMask & LEFT) {
-		acceleration -= Vector3f(std::cos(angle.y), 0.0f, -std::sin(angle.y));
+		acceleration -= Vector3f(viewMatrix[0].x, viewMatrix[1].x, 0.0f);
 	}
 
 	if (magnitude(acceleration) > 1.0f) {
@@ -38,46 +38,55 @@ void Player::update(BSP& bsp) {
 		acceleration *= airAcceleration;
 	} else {
 		if (keyMask & JUMP) {
-			velocity.y = 5.0f;
+			velocity.z = 5.0f;
 		}
 		acceleration *= groundAcceleration;
 	}
 
+	acceleration.z = gravity;
+
 	++airFrames;
 	velocity += acceleration * Time::deltaTime;
-	velocity.y += gravity * Time::deltaTime;
-	Vector3f targetPosition = position + velocity * Time::deltaTime;
-	BSP::Trace result;
-	while (bsp.clip(position, targetPosition, result)) {
-		targetPosition = position + velocity * Time::deltaTime;
-		velocity -= result.plane.normal * dot(result.plane.normal, velocity);
 
-		if (result.plane.normal.y > 0.1f) {
-			airFrames = 0;
-		}
+	if (magnitude(velocity) == 0.0f) {
+		Camera::update();
+		return;
 	}
+
+	Vector3f targetPosition = position + velocity * Time::deltaTime;
+	Vector3f friction = Vector3f(0.0f);
+	BSP::Trace result;
+	for (U32 i = 0; i < 32 && bsp.clip(position, targetPosition, result); ++i) {
+		velocity -= result.plane.normal * dot(result.plane.normal, velocity);
+		position = result.point;
+
+		if (result.plane.normal.z > result.plane.normal.x && result.plane.normal.z > result.plane.normal.y) {
+			airFrames = 0;
+
+			if (magnitude(velocity) == 0.0f) {
+				friction = -velocity;
+				break;
+			}
+
+			friction = normalize(velocity) * gravity * frictionCoefficient * Time::deltaTime;
+			if (magnitude(friction) > magnitude(velocity)) {
+				friction = -velocity;
+				break;
+			}
+		}
+
+		targetPosition = position + (velocity + friction) * Time::deltaTime;
+	}
+	velocity += friction;
 	position = result.point;
 
 	Vector3f hVelocity = velocity;
-	hVelocity.y = 0.0f;
-	if (magnitude(hVelocity) > maxVelocity && airFrames == 0) {
+	hVelocity.z = 0.0f;
+	if (magnitude(hVelocity) > maxVelocity) {
 		hVelocity = normalize(hVelocity) * maxVelocity;
 	}
-
-	Vector3f friction;
-	if (airFrames) {
-		friction = normalize(hVelocity) * gravity * dragCoefficient * Time::deltaTime;
-	} else {
-		friction = normalize(hVelocity) * gravity * frictionCoefficient * Time::deltaTime;
-	}
-	if (magnitude(friction) < magnitude(hVelocity)) {
-		hVelocity += friction;
-	} else {
-		hVelocity = Vector3f(0.0f);
-	}
-
 	velocity.x = hVelocity.x;
-	velocity.z = hVelocity.z;
+	velocity.y = hVelocity.y;
 
 	Camera::update();
 }

@@ -11,9 +11,9 @@ public:
 		using namespace mstd;
 
 		viewMatrix = 
-			rotateZ(-angle.z)
+			rotateY(-angle.y)
 			* rotateX(-angle.x)
-			* rotateY(-angle.y)
+			* rotateZ(-angle.z)
 			* translate(-position)
 		;
 	}

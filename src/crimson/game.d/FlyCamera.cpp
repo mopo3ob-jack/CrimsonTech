@@ -11,11 +11,11 @@ void FlyCamera::update(BSP& bsp) {
 
 	Vector3f velocity(0.0f);
 	if (keyMask & FORWARD) {
-		velocity += Vector3f(viewMatrix[0].z, viewMatrix[1].z, viewMatrix[2].z);
+		velocity += Vector3f(viewMatrix[0].y, viewMatrix[1].y, viewMatrix[2].y);
 	}
 
 	if (keyMask & BACKWARD) {
-		velocity -= Vector3f(viewMatrix[0].z, viewMatrix[1].z, viewMatrix[2].z);
+		velocity -= Vector3f(viewMatrix[0].y, viewMatrix[1].y, viewMatrix[2].y);
 	}
 
 	if (keyMask & RIGHT) {
@@ -33,11 +33,11 @@ void FlyCamera::update(BSP& bsp) {
 	velocity *= maxVelocity;
 
 	if (keyMask & UP) {
-		velocity.y += maxVelocity;
+		velocity.z += maxVelocity;
 	}
 
 	if (keyMask & DOWN) {
-		velocity.y -= maxVelocity;
+		velocity.z -= maxVelocity;
 	}
 
 	Vector3f targetPosition = position + velocity * Time::deltaTime;
