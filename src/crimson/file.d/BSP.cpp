@@ -832,6 +832,10 @@ mstd::Bool BSP::clip(
 		result.point = to;
 		return false;
 	} else {
+		if (isSolid(nearSplit, &rootSplit)) {
+			std::cout << "ENDING WITH SOLID NODE" << std::endl;
+		}
+
 		result.plane = node.value;
 		result.point = nearSplit;
 		return true;

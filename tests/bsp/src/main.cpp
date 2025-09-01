@@ -111,14 +111,34 @@ int main() {
 	glfwGetCursorPos(window, &prevMousePosition.x, &prevMousePosition.y);
 	Vector2d mouseDelta;
 
+	Size frames = 0;
+	Size fps = 0;
+	F32 previousTime = 0.0f;
+
 	Size imguiFrames = 0;
 	do {
 		glfwPollEvents();
 		Time::update();
 
+		if (glfwGetKey(window, GLFW_KEY_ESCAPE)) {
+			glfwSetWindowShouldClose(window, GLFW_TRUE);
+			continue;
+		}
+
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
+
+		++frames;
+		if (Time::time > previousTime + 1.0f) {
+			fps = frames;
+			previousTime = Time::time;
+			frames = 0;
+		}
+
+		ImGui::Begin("Info");
+		ImGui::Text("FPS = %d", fps);
+		ImGui::End();
 
 		if (glfwGetKey(window, GLFW_KEY_TAB)) {
 			++imguiFrames;
