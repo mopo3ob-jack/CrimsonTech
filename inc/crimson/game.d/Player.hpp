@@ -3,10 +3,11 @@
 
 #include <crimson/file.d/BSP.hpp>
 #include <crimson/game.d/Time.hpp>
+#include <crimson/game.d/Camera.hpp>
 
 namespace ct {
 
-class Player {
+class Player : public Camera {
 public:
 	void update(BSP& bsp);
 
@@ -20,8 +21,7 @@ public:
 
 	mstd::U32 keyMask;
 
-	mstd::Vector3f angle;
-	mstd::Vector3f position, velocity;
+	mstd::Vector3f velocity;
 	mstd::U32 airFrames;
 };
 

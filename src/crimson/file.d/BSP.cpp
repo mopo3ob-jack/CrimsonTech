@@ -8,12 +8,17 @@
 #include <array>
 #include <span>
 #include <optional>
+#include <bitset>
 
 #include <cassert>
 
 #include <imgui/imgui.h>
 
 namespace ct {
+
+struct IndexedFace : Plane {
+	mstd::Size vertices[3];
+};
 
 struct Face : Plane {
 	mstd::Vector3f vertices[3];
@@ -22,7 +27,10 @@ struct Face : Plane {
 static mstd::Status import(
 	const std::string& path,
 	mstd::Arena& arena,
-	std::span<Face>& faces
+	std::span<std::span<mstd::U32>>& meshes,
+	std::span<mstd::Vector3f>& vertices,
+	std::span<mstd::Vector3f>& normals,
+	std::span<mstd::U32>& elements
 ) {
 	using namespace mstd;
 
@@ -31,9 +39,6 @@ static mstd::Status import(
 	const aiScene* scene = importer.ReadFile(
 		path,
 		aiProcess_CalcTangentSpace |
-		aiProcess_MakeLeftHanded |
-		aiProcess_OptimizeGraph |
-		aiProcess_OptimizeMeshes |
 		aiProcess_JoinIdenticalVertices |
 		aiProcess_Triangulate
 	);
@@ -43,36 +48,209 @@ static mstd::Status import(
 		return 1;
 	}
 
-	Face* start = arena.tell<Face>();
+	if (scene->mNumMeshes == 0) {
+		return 1;
+	}
+
+	meshes = std::span(
+		arena.reserve<std::span<U32>>(scene->mNumMeshes),
+		scene->mNumMeshes
+	);
+
+	vertices = std::span(arena.tell<Vector3f>(), 0);
 	for (Size m = 0; m < scene->mNumMeshes; ++m) {
 		aiMesh* mesh = scene->mMeshes[m];
-		for (Size f = 0; f < mesh->mNumFaces; ++f) {
-			aiFace face = mesh->mFaces[f];
-			
-			Face result = {
-				.vertices = {
-					*(Vector3f*)&mesh->mVertices[face.mIndices[0]],
-					*(Vector3f*)&mesh->mVertices[face.mIndices[1]],
-					*(Vector3f*)&mesh->mVertices[face.mIndices[2]],
-				},
-			};
-			for (Size i = 0; i < 3; ++i) {
-				std::swap(result.vertices[i].y, result.vertices[i].z);
-				result.vertices[i].y = -result.vertices[i].y;
-			}
-			result.normal = *(Vector3f*)&mesh->mNormals[face.mIndices[0]];
-			std::swap(result.normal.y, result.normal.z);
-			result.normal.y = -result.normal.y;
-			result.normal = normalize(result.normal);
-			result.d = dot(result.normal, result.vertices[0]);
+		arena.append(mesh->mNumVertices, (Vector3f*)mesh->mVertices);
+	}
+	vertices = std::span(vertices.data(), arena.tell<Vector3f>());
 
-			arena.append(1, &result);
+	normals = std::span(arena.tell<Vector3f>(), 0);
+	for (Size m = 0; m < scene->mNumMeshes; ++m) {
+		aiMesh* mesh = scene->mMeshes[m];
+		arena.append(mesh->mNumVertices, (Vector3f*)mesh->mNormals);
+	}
+	normals = std::span(normals.data(), arena.tell<Vector3f>());
+
+	elements = std::span(arena.tell<U32>(), 0);
+	Size vertexCount = 0;
+	for (Size m = 0; m < scene->mNumMeshes; ++m) {
+		aiMesh* mesh = scene->mMeshes[m];
+
+		meshes[m] = std::span(arena.tell<U32>(), 0);
+		for (Size f = 0; f < mesh->mNumFaces; ++f) {
+			aiFace& face = mesh->mFaces[f];
+			
+			U32* elements = arena.reserve<U32>(3);
+
+			for (Size i = 0; i < 3; ++i) {
+				elements[i] = face.mIndices[i] + vertexCount;
+			}
+		}
+		meshes[m] = std::span(meshes[m].data(), arena.tell<U32>());
+
+		vertexCount += mesh->mNumVertices;
+	}
+
+	elements = std::span(elements.data(), arena.tell<U32>());
+
+	return 0;
+}
+
+static mstd::Size searchForVertex(std::span<mstd::Vector3f> vertices, mstd::Vector3f search) {
+	using namespace mstd;
+	
+	constexpr F32 EPSILON = 1.0f / 4096.0f;
+
+	constexpr auto isEqual = [](F32 x) {
+		return x >= -EPSILON && x <= EPSILON;
+	};
+
+	for (Size i = 0; i < vertices.size(); ++i) {
+		if (!isEqual(vertices[i].x - search.x)) {
+			continue;
+		}
+
+		if (!isEqual(vertices[i].y - search.y)) {
+			continue;
+		}
+
+		if (!isEqual(vertices[i].z - search.z)) {
+			continue;
+		}
+
+		return i;
+	}
+
+	return vertices.size();
+}
+
+static void convertToMinkowski(
+	mstd::Arena& vertexArena,
+	mstd::Arena& faceArena,
+	std::span<mstd::Vector3f> vertices,
+	std::span<mstd::Vector3f> normals,
+	std::span<mstd::U32> elements,
+	std::span<mstd::Vector3f>& resultVertices,
+	std::span<IndexedFace>& resultFaces
+) {
+	using namespace mstd;
+
+	resultVertices = std::span(vertexArena.tell<Vector3f>(), 0);
+	resultFaces = std::span(faceArena.reserve<IndexedFace>(elements.size() / 3), elements.size() / 3);
+	for (Size e = 0; e < elements.size(); e += 3) {
+		IndexedFace& face = resultFaces[e / 3];
+
+		for (Size i = 0; i < 3; ++i) {
+			Vector3f v = vertices[elements[e + i]];
+
+			Size searchIndex = searchForVertex(resultVertices, v);
+			if (searchIndex == resultVertices.size()) {
+				resultVertices = std::span(resultVertices.data(), vertexArena.append(1, &v) + 1);
+			}
+
+			face.vertices[i] = searchIndex;
+		}
+
+		face.normal = normals[elements[e]];
+		face.d = dot(face.normal, resultVertices[face.vertices[0]]);
+	}
+
+	resultFaces = std::span(resultFaces.data(), faceArena.tell<IndexedFace>());
+}
+
+static void convertToFaces(
+	mstd::Arena& arena,
+	std::span<mstd::Vector3f> vertices,
+	std::span<IndexedFace> faces,
+	std::span<Face>& resultFaces
+) {
+	using namespace mstd;
+
+	resultFaces = std::span(arena.reserve<Face>(faces.size()), faces.size());
+
+	for (Size f = 0; f < faces.size(); ++f) {
+		for (Size i = 0; i < 3; ++i) {
+			resultFaces[f].vertices[i] = vertices[faces[f].vertices[i]];
+		}
+
+		resultFaces[f].normal = faces[f].normal;
+		resultFaces[f].d = faces[f].d;
+	}
+}
+
+static void minkowskiSum(
+	mstd::Arena& vertexArena,
+	mstd::Arena& faceArena,
+	std::span<mstd::Vector3f>&  vertices,
+	std::span<IndexedFace>& faces
+) {
+	using namespace mstd;
+
+	static constexpr F32 w = 0.125f;
+	static constexpr F32 l = 1.5f;
+	static constexpr F32 h = 0.25f;
+	constexpr Vector3f minAABB(-w, -w, -l);
+	constexpr Vector3f maxAABB(w, w, h);
+
+	constexpr F32 EPSILON = 1.0f / 4096.0f;
+	constexpr F32 ONE = 1.0f - EPSILON;
+
+	std::vector<U8> directions;
+	directions.resize(vertices.size());
+
+	std::cout << "BEFORE" << std::endl;
+	for (Size v = 0; v < vertices.size(); ++v) {
+		std::cout << std::string(vertices[v]) << std::endl;
+	}
+
+	std::cout << "MASKS AND NORMALS" << std::endl;
+
+	for (Size f = 0; f < faces.size(); ++f) {
+		const IndexedFace face = faces[f];
+	
+		U8 directionMask = 0;
+		for (Size b = 0; b < 3; ++b) {
+			directionMask <<= 2;
+			if (face.normal[b] >= EPSILON) {
+				directionMask |= 0b01;
+			} else if (face.normal[b] <= -EPSILON) {
+				directionMask |= 0b10;
+			}
+		}
+
+		for (Size v = 0; v < 3; ++v) {
+			Vector3f& vertex = vertices[face.vertices[v]];
+			U8 y = directionMask;
+			U8 n = directions[face.vertices[v]];
+
+			for (I32 b = 2; b >= 0; --b) {
+				if (y & 0b01 && !(n & 0b01)) {
+					vertex[b] -= minAABB[b];
+				}
+				if (y & 0b10 && !(n & 0b10)) {
+					vertex[b] -= maxAABB[b];
+				}
+
+				y >>= 2;
+				n >>= 2;
+			}
+			directions[face.vertices[v]] |= directionMask;
 		}
 	}
 
-	faces = std::span(start, arena.tell<Face>());
+	std::cout << "AFTER" << std::endl;
+	for (Size v = 0; v < vertices.size(); ++v) {
+		std::cout << std::string(vertices[v]) << std::endl;
+	}
 
-	return 0;
+	for (Size f = 0; f < faces.size(); ++f) {
+		//Vector3f a = vertices[faces[f].vertices[2]] - vertices[faces[f].vertices[0]];
+		//Vector3f b = vertices[faces[f].vertices[1]] - vertices[faces[f].vertices[0]];
+		//faces[f].normal = normalize(cross(a, b));
+		faces[f].d = dot(vertices[faces[f].vertices[0]], faces[f].normal);
+	}
+
+	return;
 }
 
 static mstd::U32 countSplits(
@@ -125,7 +303,8 @@ static mstd::U32 bestTriangle(const std::span<Face>& faces) {
 	U32 bestTriangle = 0;
 	for (Size i = 0; i < faces.size(); ++i) {
 		U32 balance;
-		U32 splits = countSplits(faces, faces[i], balance);
+		Plane p = faces[i];
+		U32 splits = countSplits(faces, p, balance);
 		U32 score = balance + splits;
 
 		if (score < lowestScore) {
@@ -145,15 +324,17 @@ static mstd::Bool splitTriangle(const Plane& plane, const Face& face, std::optio
 	U8 frontCount = 0;
 	U8 backCount = 0;
 	U8 zeroVerts = 0;
+
+	constexpr F32 EPSILON = 1.0f / 4096.0f;
 	
 	const Vector3f* prev = face.vertices + 2;
 	const Vector3f* curr;
 	for (Size i = 0; i < 3; ++i) {
 		curr = face.vertices + i;
 		F32 prevDistance = plane.distance(*prev);
-		if (prevDistance > 1.0f / 1024.0f) {
+		if (prevDistance > EPSILON) {
 			frontVertices[frontCount++] = *prev;
-		} else if (prevDistance < -1.0f / 1024.0f) {
+		} else if (prevDistance < -EPSILON) {
 			backVertices[backCount++] = *prev;
 		} else {
 			frontVertices[frontCount++] = *prev;
@@ -286,6 +467,8 @@ static void logPartition(mstd::Bool solid, BSP::Node* node, mstd::Size depth) {
 	}
 }
 
+std::vector<Face> finalFaces;
+
 static void partition(
 	mstd::Arena& arena,
 	mstd::Arena& frontArena,
@@ -307,15 +490,18 @@ static void partition(
 	for (Size i = 0; i < faces.size(); ++i) {
 		std::optional<Face> result[4] = { std::nullopt };
 		if (splitTriangle(node.value, faces[i], result)) {
+			finalFaces.push_back(faces[i]);
 			continue;
 		}
 
 		if (result[0].has_value()) {
 			Face& f = result[0].value();
 			frontArena.append<Face>(1, &f);
+			finalFaces.push_back(f);
 			if (result[1].has_value()) {
 				f = result[1].value();
 				frontArena.append(1, &f);
+				finalFaces.push_back(f);
 			}
 		}
 
@@ -344,6 +530,70 @@ static void partition(
 		partition(arena, frontArena, backArena, backFaces, *node[1]);
 	} else {
 		node[1] = nullptr;
+	}
+
+	frontArena.truncate(frontFaces.data());
+	backArena.truncate(backFaces.data());
+}
+
+static void merge(
+	mstd::Arena& arena,
+	mstd::Arena& frontArena,
+	mstd::Arena& backArena,
+	const std::span<Face>& faces,
+	BSP::Node& node
+) {
+	using namespace mstd;
+
+	if (faces.empty()) {
+		return;
+	}
+
+	Face* frontStart = frontArena.tell<Face>();
+	Face* backStart = backArena.tell<Face>();
+	for (Size i = 0; i < faces.size(); ++i) {
+		std::optional<Face> result[4] = { std::nullopt };
+		if (splitTriangle(node.value, faces[i], result)) {
+			continue;
+		}
+
+		if (result[0].has_value()) {
+			Face& f = result[0].value();
+			frontArena.append<Face>(1, &f);
+			if (result[1].has_value()) {
+				f = result[1].value();
+				frontArena.append(1, &f);
+			}
+		}
+
+		if (!node[1]) {
+			continue;
+		}
+
+		if (result[2].has_value()) {
+			Face& f = result[2].value();
+			backArena.append(1, &f);
+			if (result[3].has_value()) {
+				f = result[3].value();
+				backArena.append(1, &f);
+			}
+		}
+	}
+
+	std::span<Face> frontFaces = std::span(frontStart, frontArena.tell<Face>());
+	std::span<Face> backFaces = std::span(backStart, backArena.tell<Face>());
+
+	if (frontFaces.size()) {
+		if (node[0]) {
+			merge(arena, frontArena, backArena, frontFaces, *node[0]);
+		} else {
+			node[0] = arena.reserve<BSP::Node>(1);
+			partition(arena, frontArena, backArena, frontFaces, *node[0]);
+		}
+	}
+
+	if (backFaces.size() && node[1]) {
+		merge(arena, frontArena, backArena, backFaces, *node[1]);
 	}
 
 	frontArena.truncate(frontFaces.data());
@@ -389,24 +639,17 @@ static void optimizeTopology(
 	}
 }
 
-void BSP::build(const std::string& path) {
+void BSP::build(const std::string& path, mstd::Arena& arena) {
 	using namespace mstd;
 
-	Arena bspArena(1L << 24);
+	Arena faceArena((Size)1 << 24);
 
-	std::span<Face> faces;
+	std::span<std::span<U32>> meshes;
+	std::span<Vector3f> vertices;
+	std::span<Vector3f> normals;
+	std::span<U32> elements;
 
-	if (import(path, bspArena, faces)) return;
-
-	Arena frontArena(faces.size_bytes() * 256);
-	Arena backArena(faces.size_bytes() * 256);
-
-	partition(arena, frontArena, backArena, faces, rootSplit);
-
-	std::vector<Vector3f> vertices;
-	std::vector<Vector3f> normals;
-	std::vector<U32> indices;
-	optimizeTopology(faces, vertices, normals, indices);
+	if (import(path, faceArena, meshes, vertices, normals, elements)) return;
 
 	std::vector<VertexArray::Attribute> attributes = {
 		{
@@ -422,14 +665,53 @@ void BSP::build(const std::string& path) {
 			.normalized = false,
 		},
 	};
-	
+
 	vertexArray.allocateAttributes(attributes, vertices.size());
+
 	vertexArray.writeAttributes(0, vertices.data(), vertices.size());
 	vertexArray.writeAttributes(1, normals.data(), normals.size());
 
-	indexCount = indices.size();
-	vertexArray.allocateElements(indices.size() * sizeof(U32));
-	vertexArray.writeElements(indices.data(), indices.size());
+	elementCount = elements.size();
+	vertexArray.allocateElements(elements.size_bytes());
+	vertexArray.writeElements(elements.data(), elements.size());
+
+	Size totalSize = 0l;
+	for (Size i = 0; i < meshes.size(); ++i) {
+		totalSize += meshes[i].size();
+	}
+	totalSize /= 3;
+	totalSize *= sizeof(Face);
+
+	std::sort(
+		meshes.begin(),
+		meshes.end(),
+		[](std::span<U32> a, std::span<U32> b) {
+			return a.size() < b.size();
+		}
+	);
+
+	Arena vertexArena(vertices.size() * 16);
+	std::span<Vector3f> minkowskiVertices;
+	std::span<IndexedFace> minkowskiFaces;
+	convertToMinkowski(vertexArena, faceArena, vertices, normals, meshes[0], minkowskiVertices, minkowskiFaces);
+
+	minkowskiSum(vertexArena, faceArena, minkowskiVertices, minkowskiFaces);
+
+	std::span<Face> faces;
+	convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
+
+	Arena frontArena(totalSize * 256);
+	Arena backArena(totalSize * 256);
+	partition(arena, frontArena, backArena, faces, rootSplit);
+
+	for (Size m = 1; m < meshes.size(); ++m) {
+		vertexArena.truncate(minkowskiVertices.data());
+		faceArena.truncate(minkowskiFaces.data());
+		convertToMinkowski(vertexArena, faceArena, vertices, normals, meshes[m], minkowskiVertices, minkowskiFaces);
+		minkowskiSum(vertexArena, faceArena, minkowskiVertices, minkowskiFaces);
+		convertToFaces(faceArena, minkowskiVertices, minkowskiFaces, faces);
+		merge(arena, frontArena, backArena, faces, rootSplit);
+	}
 }
 
 static mstd::Bool findNode(const BSP::Node& b, const mstd::Vector3f& p, const BSP::Node*& result) {
@@ -456,78 +738,6 @@ mstd::Bool BSP::colliding(const mstd::Vector3f& point) const {
 	const BSP::Node* result;
 	return findNode(rootSplit, point, result);
 }
-
-//mstd::Bool BSP::intersect(
-//	const mstd::Vector3f& from,
-//	const mstd::Vector3f& to,
-//	BSP::Trace& result
-//) const {
-//	return intersect(from, to, result, rootSplit);
-//}
-//
-//mstd::Bool BSP::intersect(
-//	const mstd::Vector3f& from,
-//	const mstd::Vector3f& to,
-//	BSP::Trace& result,
-//	const BSP::Node& node
-//) const {
-//	using namespace mstd;
-//
-//	F32 fromDist = node.value.distance(from);
-//	F32 toDist = node.value.distance(to);
-//
-//	if (fromDist >= 0.0f && toDist >= 0.0f) {
-//		if (node[0]) {
-//			return intersect(from, to, result, *node[0]);
-//		} else {
-//			result.point = to;
-//			return false;
-//		}
-//	}
-//
-//	if (fromDist <= 0.0f && toDist <= 0.0f) {
-//		if (node[1]) {
-//			return intersect(from, to, result, *node[1]);
-//		} else {
-//			return true;
-//		}
-//	}
-//
-//	constexpr F32 EPSILON = 1.0f / 4096.0f;
-//
-//	Bool side = fromDist < 0.0f;
-//	F32 nearT, farT;
-//	Vector3f nearSplit, farSplit;
-//	if (side) {
-//		nearT = (fromDist + EPSILON) / (fromDist - toDist);
-//		farT = (fromDist - EPSILON) / (fromDist - toDist);
-//	} else {
-//		nearT = (fromDist - EPSILON) / (fromDist - toDist);
-//		farT = (fromDist + EPSILON) / (fromDist - toDist);
-//	}
-//
-//	nearT = std::clamp(nearT, 0.0f, 1.0f);
-//	farT = std::clamp(farT, 0.0f, 1.0f);
-//
-//	nearSplit = from + (to - from) * nearT;
-//	farSplit = from + (to - from) * farT;
-//
-//	result.plane = node.value;
-//
-//	if (node[side]) {
-//		if (intersect(from, nearSplit, result, *node[side])) {
-//			return true;
-//		}
-//	}
-//
-//	if (node[side ^ 1]) {
-//		if (intersect(farSplit, to, result, *node[side ^ 1])) {
-//			return true;
-//		}
-//	}
-//
-//	return false;
-//}
 
 mstd::Bool BSP::isSolid(const mstd::Vector3f& point, const Node* node) const {
 	using namespace mstd;
@@ -579,7 +789,7 @@ mstd::Bool BSP::clip(
 		}
 	}
 
-	if (fromDist <= 0.0f && toDist <= 0.0f) {
+	if (fromDist < 0.0f && toDist < 0.0f) {
 		if (node[1]) {
 			return clip(from, to, result, *node[1]);
 		} else {
@@ -591,39 +801,45 @@ mstd::Bool BSP::clip(
 	constexpr F32 EPSILON = 1.0f / 4096.0f;
 
 	Bool side = fromDist < 0.0f;
-	F32 t;
+	F32 nearT, farT;
 	if (side) {
-		t = (fromDist + EPSILON) / (fromDist - toDist);
+		nearT = (fromDist + EPSILON) / (fromDist - toDist);
+		farT = (fromDist - EPSILON) / (fromDist - toDist);
 	} else {
-		t = (fromDist - EPSILON) / (fromDist - toDist);
+		nearT = (fromDist - EPSILON) / (fromDist - toDist);
+		farT = (fromDist + EPSILON) / (fromDist - toDist);
 	}
 
-	t = std::clamp(t, 0.0f, 1.0f);
+	nearT = std::clamp(nearT, 0.0f, 1.0f);
+	farT = std::clamp(farT, 0.0f, 1.0f);
 
-	Vector3f split = from + (to - from) * t;
+	Vector3f nearSplit = from + (to - from) * nearT;
+	Vector3f farSplit = from + (to - from) * farT;
 
 	if (node[side]) {
-		if (clip(from, split, result, *node[side])) {
+		if (clip(from, nearSplit, result, *node[side])) {
 			return true;
 		}
 	}
 
 	if (node[side ^ 1]) {
-		if (!isSolid(split, node[side ^ 1])) {
-			return clip(split, to, result, *node[side ^ 1]);
+		if (!isSolid(farSplit, node[side ^ 1])) {
+			return clip(farSplit, to, result, *node[side ^ 1]);
 		}
 	}
 
 	if (side) {
-		result.plane.normal = -node.value.normal;
-		result.plane.d = -node.value.d;
+		result.point = to;
+		return false;
 	} else {
+		if (isSolid(nearSplit, &rootSplit)) {
+			std::cout << "ENDING WITH SOLID NODE" << std::endl;
+		}
+
 		result.plane = node.value;
+		result.point = nearSplit;
+		return true;
 	}
-
-	result.point = split;
-
-	return true;
 }
 
 void printNode(const BSP::Node& b, mstd::U32 pad) {
