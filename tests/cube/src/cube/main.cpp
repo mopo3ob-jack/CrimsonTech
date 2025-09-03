@@ -273,8 +273,8 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		Matrix4f rotationMatrix = 
-			rotateX(previousTime)
-			* rotateY(previousTime);
+			(Matrix4f)rotateX(previousTime)
+			* (Matrix4f)rotateY(previousTime);
 
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 

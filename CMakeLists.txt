@@ -6,7 +6,8 @@ project(
 	HOMEPAGE_URL "https://github.com/mopo3ob-jack/CrimsonTech"
 )
 
-include(GNUInstallDirs)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 include(FetchContent)
 include(FindOpenGL)
 
@@ -44,8 +45,13 @@ add_subdirectory(src/crimson/renderer.d)
 add_subdirectory(src/crimson/file.d)
 add_subdirectory(src/crimson/game.d)
 
-set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build tiling test programs")
+set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build crimson test programs")
 if (${CRIMSON_BUILD_TESTS})
 	add_subdirectory("tests/cube")
 	add_subdirectory("tests/bsp")
+endif()
+
+set(CRIMSON_BUILD_TOOLS TRUE CACHE BOOL "Build crimson tools")
+if (${CRIMSON_BUILD_TOOLS})
+	add_subdirectory("tools/model")
 endif()
