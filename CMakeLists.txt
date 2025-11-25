@@ -47,7 +47,6 @@ add_subdirectory(src/crimson/game.d)
 
 set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build crimson test programs")
 if (${CRIMSON_BUILD_TESTS})
-	add_subdirectory("tests/cube")
 	add_subdirectory("tests/bsp")
 	add_subdirectory("tests/indirect")
 endif()
