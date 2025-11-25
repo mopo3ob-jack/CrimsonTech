@@ -60,14 +60,14 @@ static mstd::Status import(
 	vertices = std::span(arena.tell<Vector3f>(), 0);
 	for (Size m = 0; m < scene->mNumMeshes; ++m) {
 		aiMesh* mesh = scene->mMeshes[m];
-		arena.append(mesh->mNumVertices, (Vector3f*)mesh->mVertices);
+		arena.append((Vector3f*)mesh->mVertices, mesh->mNumVertices);
 	}
 	vertices = std::span(vertices.data(), arena.tell<Vector3f>());
 
 	normals = std::span(arena.tell<Vector3f>(), 0);
 	for (Size m = 0; m < scene->mNumMeshes; ++m) {
 		aiMesh* mesh = scene->mMeshes[m];
-		arena.append(mesh->mNumVertices, (Vector3f*)mesh->mNormals);
+		arena.append((Vector3f*)mesh->mNormals, mesh->mNumVertices);
 	}
 	normals = std::span(normals.data(), arena.tell<Vector3f>());
 
@@ -145,7 +145,7 @@ static void convertToMinkowski(
 
 			Size searchIndex = searchForVertex(resultVertices, v);
 			if (searchIndex == resultVertices.size()) {
-				resultVertices = std::span(resultVertices.data(), vertexArena.append(1, &v) + 1);
+				resultVertices = std::span(resultVertices.data(), vertexArena.append(&v, 1) + 1);
 			}
 
 			face.vertices[i] = searchIndex;
@@ -496,21 +496,21 @@ static void partition(
 
 		if (result[0].has_value()) {
 			Face& f = result[0].value();
-			frontArena.append<Face>(1, &f);
+			frontArena.append<Face>(&f, 1);
 			finalFaces.push_back(f);
 			if (result[1].has_value()) {
 				f = result[1].value();
-				frontArena.append(1, &f);
+				frontArena.append(&f, 1);
 				finalFaces.push_back(f);
 			}
 		}
 
 		if (result[2].has_value()) {
 			Face& f = result[2].value();
-			backArena.append(1, &f);
+			backArena.append(&f, 1);
 			if (result[3].has_value()) {
 				f = result[3].value();
-				backArena.append(1, &f);
+				backArena.append(&f, 1);
 			}
 		}
 	}
@@ -559,10 +559,10 @@ static void merge(
 
 		if (result[0].has_value()) {
 			Face& f = result[0].value();
-			frontArena.append<Face>(1, &f);
+			frontArena.append<Face>(&f, 1);
 			if (result[1].has_value()) {
 				f = result[1].value();
-				frontArena.append(1, &f);
+				frontArena.append(&f, 1);
 			}
 		}
 
@@ -572,10 +572,10 @@ static void merge(
 
 		if (result[2].has_value()) {
 			Face& f = result[2].value();
-			backArena.append(1, &f);
+			backArena.append(&f, 1);
 			if (result[3].has_value()) {
 				f = result[3].value();
-				backArena.append(1, &f);
+				backArena.append(&f, 1);
 			}
 		}
 	}
@@ -666,13 +666,9 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 		},
 	};
 
-	vertexArray.allocateAttributes(attributes, vertices.size());
-
+	vertexArray = VertexArray(attributes, vertices.size(), elements.size(), sizeof(U32));
 	vertexArray.writeAttributes(0, vertices.data(), vertices.size());
 	vertexArray.writeAttributes(1, normals.data(), normals.size());
-
-	elementCount = elements.size();
-	vertexArray.allocateElements(elements.size_bytes());
 	vertexArray.writeElements(elements.data(), elements.size());
 
 	Size totalSize = 0l;

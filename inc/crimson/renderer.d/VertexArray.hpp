@@ -5,6 +5,7 @@
 #include <vector>
 #include <mstd/memory>
 #include <type_traits>
+#include <span>
 
 namespace ct {
 
@@ -17,7 +18,14 @@ public:
 		GLboolean normalized;
 	};
 
-	VertexArray();
+	VertexArray() {}
+
+	VertexArray(
+		std::span<const Attribute> attributes,
+		mstd::Size vertexCount,
+		mstd::Size elementCount,
+		mstd::Size elementSize
+	);
 
 	VertexArray(VertexArray& vertexArray) = delete;
 	VertexArray& operator=(VertexArray& vertexArray) = delete;
@@ -67,7 +75,7 @@ public:
 	template <typename T> requires std::is_integral_v<T>
 	void draw(GLsizei count, mstd::Size offset) const;
 
-private:
+//protected:
 	std::vector<GLintptr> attributeOffsets;
 
 	GLuint vbo = 0;
