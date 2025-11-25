@@ -53,10 +53,6 @@ public:
 		}
 	}
 
-	void allocateAttributes(const std::vector<Attribute>& attributes, mstd::Size vertexCount);
-
-	void allocateElements(mstd::Size bufferSize);
-
 	template <typename T>
 	void writeAttributes(mstd::Size attribute, T* data, GLsizeiptr count, GLintptr offset = 0L) {
 		glNamedBufferSubData(
@@ -75,7 +71,7 @@ public:
 	template <typename T> requires std::is_integral_v<T>
 	void draw(GLsizei count, mstd::Size offset) const;
 
-//protected:
+protected:
 	std::vector<GLintptr> attributeOffsets;
 
 	GLuint vbo = 0;
