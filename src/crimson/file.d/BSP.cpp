@@ -670,6 +670,7 @@ void BSP::build(const std::string& path, mstd::Arena& arena) {
 	vertexArray.writeAttributes(0, vertices.data(), vertices.size());
 	vertexArray.writeAttributes(1, normals.data(), normals.size());
 	vertexArray.writeElements(elements.data(), elements.size());
+	elementCount = elements.size();
 
 	Size totalSize = 0l;
 	for (Size i = 0; i < meshes.size(); ++i) {
