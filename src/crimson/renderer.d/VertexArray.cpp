@@ -2,14 +2,17 @@
 
 namespace ct {
 
-VertexArray::VertexArray() {
+VertexArray::VertexArray(
+	std::span<const Attribute> attributes,
+	mstd::Size vertexCount,
+	mstd::Size elementCount,
+	mstd::Size elementSize
+) {
+	using namespace mstd;
+
 	glCreateVertexArrays(1, &vao);
 	glCreateBuffers(1, &vbo);
 	glCreateBuffers(1, &ebo);
-}
-
-void VertexArray::allocateAttributes(const std::vector<Attribute>& attributes, mstd::Size vertexCount) {
-	using namespace mstd;
 
 	attributeOffsets.resize(attributes.size());
 	
@@ -37,10 +40,8 @@ void VertexArray::allocateAttributes(const std::vector<Attribute>& attributes, m
 		attributeOffsets[i] = offset;
 		offset += attributes[i].stride * vertexCount;
 	}
-}
 
-void VertexArray::allocateElements(mstd::Size bufferSize) {
-	glNamedBufferStorage(ebo, bufferSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+	glNamedBufferStorage(ebo, elementCount * elementSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
 	glVertexArrayElementBuffer(vao, ebo);
 }
 

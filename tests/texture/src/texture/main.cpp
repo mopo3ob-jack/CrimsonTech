@@ -2,9 +2,14 @@
 #include <mstd/misc>
 
 #include <crimson/renderer>
+#include <crimson/file>
+#include <crimson/game>
 #include <crimson/types.d/Plane.hpp>
 
 #include <GLFW/glfw3.h>
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_opengl3.h>
 
 #include <iostream>
 #include <algorithm>
@@ -13,41 +18,13 @@
 using namespace mstd;
 using namespace ct;
 
-static constexpr Vector2f sensitivity(0.15f, 0.15f);
-
-static constexpr F32 maxVelocity = 6.0f;
-static constexpr F32 maxAcceleration = 40.0;
-static constexpr F32 frictionCoefficient = 1.7f;
+static constexpr Vector2f sensitivity(0.5f, 0.5f);
 
 static Matrix4f projectionMatrix;
 
 static void resize(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
 	projectionMatrix = perspective(F32(width) / F32(height), F32(M_PI_2), 0.01f, 100.0f);
-}
-
-static Matrix4f rotateX(F32 angle) {
-	F32 cosA = std::cos(angle);
-	F32 sinA = std::sin(angle);
-
-	return Matrix4f(
-		{1,  0,    0,     0},
-		{0,  cosA, -sinA, 0},
-		{0,  sinA, cosA,  0},
-		{0,  0,    0,     1}
-	);
-}
-
-static Matrix4f rotateY(F32 angle) {
-	F32 cosA = std::cos(angle);
-	F32 sinA = std::sin(angle);
-
-	return Matrix4f(
-		{cosA,  0, sinA,  0},
-		{0,     1, 0,     0},
-		{-sinA, 0, cosA,  0},
-		{0,     0, 0,     1}
-	);
 }
 
 int main() {
@@ -57,16 +34,16 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+	glfwWindowHint(GLFW_SAMPLES, 4);
+
 	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
 	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Cube", monitor, nullptr);
+	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "BSP", monitor, nullptr);
 	if (!window) {
 		std::cerr << errorText << "Could not open a GLFW window" << std::endl;
 		glfwTerminate();
 		return 1;
 	}
-
-	projectionMatrix = perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f);
 
 	glfwMakeContextCurrent(window);
 
@@ -76,11 +53,23 @@ int main() {
 		return 1;
 	}
 
-	glfwSetWindowSizeCallback(window, resize);
+	projectionMatrix = perspective(F32(mode->width) / F32(mode->height), F32(M_PI_2), 0.01f, 100.0f);
+
+	glfwSetFramebufferSizeCallback(window, resize);
+	Bool cursorEnabled = false;
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	if (glfwRawMouseMotionSupported()) {
 		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 	}
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init();
+
+	glfwSwapInterval(1);
 
 	glViewport(0, 0, mode->width, mode->height);
 	glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -88,6 +77,9 @@ int main() {
 	glFrontFace(GL_CCW);
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
+	//glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_MULTISAMPLE);
 
 	Shader::CreateInfo createInfo = {
 		.vertexPath = "resources/shaders/shader.vert",
@@ -100,6 +92,7 @@ int main() {
 	GLuint rotationUniform = glGetUniformLocation(shader, "rotate");
 	GLuint cameraUniform = glGetUniformLocation(shader, "camera");
 	GLuint cameraPositionUniform = glGetUniformLocation(shader, "cameraPosition");
+	GLuint wireframeUniform = glGetUniformLocation(shader, "wireframe");
 
 	std::vector<VertexArray::Attribute> vertexAttributes = {
 		{
@@ -180,7 +173,7 @@ int main() {
 		{0.0, -1.0, 0.0},
 	};
 
-	U16 indices[] = {
+	U16 elements[] = {
 		0, 1, 2,
 		0, 2, 3,
 
@@ -199,103 +192,163 @@ int main() {
 		20, 21, 22,
 		20, 22, 23,
 	};
-	
-	VertexArray vertexArray(vertexAttributes, sizeof(vertices) / sizeof(Vector3f), sizeof(indices) / sizeof(U16), sizeof(U16));
-	vertexArray.writeAttributes(0, vertices, sizeof(vertices) / sizeof(Vector3f));
-	vertexArray.writeAttributes(1, normals, sizeof(normals) / sizeof(Vector3f));
-	vertexArray.writeElements(indices, sizeof(indices) / sizeof(U16));
 
-	Vector3f cameraPosition = Vector3f(0.0, 1.545, -2.0);
-	Vector3f cameraVelocity = Vector3f(0.0, 0.0, 0.0);
-	Vector3f cameraAngle = Vector3f(0.0, 0.0, 0.0);
-	F32 airTime = 0.0f;
-	F32 verticalVelocity = 0.0f;
+	std::vector<IndirectVertexArray::DrawIndex> indices = {
+		{
+			.count = sizeof(elements) / sizeof(U16),
+			.instanceCount = 1,
+			.firstVertex = 0,
+			.baseVertex = 0,
+			.baseInstance = 0,
+		},
+	};
 
-	F64 previousTime = glfwGetTime();
-	F32 deltaTime = 0;
+	VertexArray cube(
+		vertexAttributes,
+		sizeof(vertices) / sizeof(Vector3f),
+		sizeof(elements) / sizeof(U16),
+		sizeof(U16)
+	);
+
+	cube.writeAttributes(0, vertices, sizeof(vertices) / sizeof(Vector3f));
+	cube.writeAttributes(1, normals, sizeof(normals) / sizeof(Vector3f));
+	cube.writeElements(elements, sizeof(elements) / sizeof(U16));
+	//cube.writeIndices(indices.data(), indices.size(), 0);
+
+	FreeCamera player;
+	player.position = Vector3f(0.0f, 1.0f, 1.5f);
+	//player.velocity = Vector3f(0.0f, 0.0f, 0.0f);
+	player.angle = Vector3f(0.0f);
+
 	Vector2d prevMousePosition;
 	glfwGetCursorPos(window, &prevMousePosition.x, &prevMousePosition.y);
 	Vector2d mouseDelta;
 
+	Size frames = 0;
+	Size fps = 0;
+	F32 previousTime = 0.0f;
+
+	Size imguiFrames = 0;
 	do {
 		glfwPollEvents();
+		Time::update();
+
+		if (glfwGetKey(window, GLFW_KEY_ESCAPE)) {
+			glfwSetWindowShouldClose(window, GLFW_TRUE);
+			continue;
+		}
+
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
+		++frames;
+		if (Time::time > previousTime + 1.0f) {
+			fps = frames;
+			previousTime = Time::time;
+			frames = 0;
+		}
+
+		ImGui::Begin("Info");
+		ImGui::Text("FPS = %d", fps);
+		ImGui::End();
+
+		if (glfwGetKey(window, GLFW_KEY_TAB)) {
+			++imguiFrames;
+		} else {
+			imguiFrames = 0;
+		}
+
+		if (imguiFrames == 1) {
+			if (cursorEnabled) {
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+				io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+				io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+			} else {
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+				io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+				io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+			}
+
+			cursorEnabled ^= 1;
+		}
 
 		Vector2d mousePosition;
 		glfwGetCursorPos(window, &mousePosition.x, &mousePosition.y);
-		mouseDelta = mousePosition - prevMousePosition;
+		if (!cursorEnabled) {
+			mouseDelta = mousePosition - prevMousePosition;
+			player.angle.x += mouseDelta.y * sensitivity.y / F32(mode->height);
+			player.angle.z += mouseDelta.x * sensitivity.x / F32(mode->height);
+
+			player.angle.x = std::clamp(player.angle.x, F32(-M_PI_2), F32(M_PI_2));
+		}
 		prevMousePosition = mousePosition;
-		cameraAngle.x += mouseDelta.y * deltaTime * sensitivity.y;
-		cameraAngle.y += mouseDelta.x * deltaTime * sensitivity.x;
 
-		cameraAngle.x = std::clamp(cameraAngle.x, F32(- M_PI_2), F32(M_PI_2));
-
-		Vector3f cameraAcceleration = Vector3f(0.0);
+		player.keyMask = 0;
 		if (glfwGetKey(window, GLFW_KEY_W)) {
-			cameraAcceleration += Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
+			player.keyMask |= player.FORWARD;
 		}
 
 		if (glfwGetKey(window, GLFW_KEY_S)) {
-			cameraAcceleration -= Vector3f(std::sin(cameraAngle.y), 0.0f, std::cos(cameraAngle.y));
+			player.keyMask |= player.BACKWARD;
 		}
-
+		
 		if (glfwGetKey(window, GLFW_KEY_D)) {
-			cameraAcceleration += Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+			player.keyMask |= player.RIGHT;
 		}
-
+		
 		if (glfwGetKey(window, GLFW_KEY_A)) {
-			cameraAcceleration -= Vector3f(std::cos(cameraAngle.y), 0.0f, -std::sin(cameraAngle.y));
+			player.keyMask |= player.LEFT;
+		}
+		
+		if (glfwGetKey(window, GLFW_KEY_E)) {
+			player.keyMask |= player.UP;
 		}
 
-		if (magnitude(cameraAcceleration) > 1.0f) {
-			cameraAcceleration = normalize(cameraAcceleration);
+		if (glfwGetKey(window, GLFW_KEY_Q)) {
+			player.keyMask |= player.DOWN;
 		}
-
-		cameraAcceleration *= maxAcceleration;
-
-		Vector3f cameraFriction = normalize(cameraVelocity) * frictionCoefficient * -9.81 * deltaTime;
-		if (magnitude(cameraVelocity) > magnitude(cameraFriction)) {
-			cameraVelocity += cameraFriction;
-		} else {
-			cameraVelocity = Vector3f(0.0f);
-		}
-
-		cameraVelocity += cameraAcceleration * deltaTime;
-		if (magnitude(cameraVelocity) > maxVelocity) {
-			cameraVelocity = normalize(cameraVelocity) * maxVelocity;
-		}
-
-		cameraPosition += cameraVelocity * deltaTime;
+		
+		player.update();
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		Matrix4f rotationMatrix = 
-			(Matrix4f)rotateX(previousTime)
-			* (Matrix4f)rotateY(previousTime);
-
+		Matrix4f rotationMatrix = Matrix4f(1.0f);
 		Matrix4f objectMatrix = translate(Vector3f(0.0, 1.0, 0.0)) * rotationMatrix;
 
-		Matrix4f cameraMatrix = 
-			projectionMatrix
-			* rotateX(cameraAngle.x)
-			* rotateY(cameraAngle.y)
-			* translate(-cameraPosition);
-
+		Matrix4f cameraMatrix = projectionMatrix * player.viewMatrix;
 
 		shader.use();
 
+		rotationMatrix = rotateX(0.0f);
+
+		objectMatrix = translate(Vector3f(0.0, 0.0, 0.0)) * rotationMatrix;
+
+		Matrix4f identityMatrix = translate(Vector3f(0.0f));
 		glUniformMatrix4fv(objectUniform, 1, GL_FALSE, (GLfloat*)&objectMatrix);
 		glUniformMatrix4fv(rotationUniform, 1, GL_FALSE, (GLfloat*)&rotationMatrix);
 		glUniformMatrix4fv(cameraUniform, 1, GL_FALSE, (GLfloat*)&cameraMatrix);
-		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&cameraPosition);
+		glUniform3fv(cameraPositionUniform, 1, (GLfloat*)&player.position);
 
-		vertexArray.draw<U16>(sizeof(indices) / sizeof(U16), 0);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		glUniform1i(wireframeUniform, 0);
+
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		//glClear(GL_DEPTH_BUFFER_BIT);
+		//glUniform1i(wireframeUniform, 1);
+		//bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
+		//
+		cube.draw<mstd::U16>(sizeof(elements) / 2, 0);
+
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(window);
-
-		F64 time = glfwGetTime();
-		deltaTime = time - previousTime;
-		previousTime = time;
 	} while (!glfwWindowShouldClose(window));
+
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
