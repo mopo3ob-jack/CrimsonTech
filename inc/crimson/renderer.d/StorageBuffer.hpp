@@ -12,11 +12,6 @@ public:
 	StorageBuffer() : handle(0) {}
 
 	template <typename T>
-	StorageBuffer(GLsizeiptr size) {
-		StorageBuffer((void*)nullptr, size);
-	}
-
-	template <typename T>
 	StorageBuffer(T* data, GLsizeiptr size) {
 		glCreateBuffers(1, &handle);
 
@@ -52,6 +47,10 @@ public:
 
 	operator GLuint() const {
 		return handle;
+	}
+
+	void bind(GLuint index) const {
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, index, handle);
 	}
 
 private:
