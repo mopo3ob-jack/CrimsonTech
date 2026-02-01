@@ -3,6 +3,7 @@
 
 #include <glad/glad.h>
 #include <mstd/geometry>
+#include <iostream>
 
 namespace ct {
 
@@ -26,8 +27,12 @@ public:
 	TextureManager& operator=(TextureManager&& tm) {
 		this->~TextureManager();
 
+		std::copy(tm.uniforms, tm.uniforms + TEXTURE_UNITS, uniforms);
 		std::copy(tm.handles, tm.handles + TEXTURE_UNITS, handles);
 		std::copy(tm.textureCount, tm.textureCount + TEXTURE_UNITS, textureCount);
+
+		std::fill(tm.handles, tm.handles + TEXTURE_UNITS, 0);
+		std::fill(tm.textureCount, tm.textureCount + TEXTURE_UNITS, 0);
 
 		return *this;
 	}

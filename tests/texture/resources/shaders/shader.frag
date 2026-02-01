@@ -22,23 +22,15 @@ layout (binding = 0, std430) readonly buffer mBuffer {
 	Material materials[];
 };
 
-Material cm[] = {
-	{0, 9, 1, 9},
-	{0, 6, 1, 6},
-};
-
 float ambient = 0.1f;
 float diffuse = 0.7f;
-float specular = 0.4f;
+float specular = 0.6f;
 
 vec3 lightColor = vec3(1.0f, 1.0f, 1.0f);
 
 vec3 lightPosition = vec3(0.0, 0.0, 1.0);
 
 void main() {
-
-	fragColor = vec4(1.0f);
-	return;
 	vec3 albedo = texture(
 		textures[materials[f_material].albedoUnit],
 		vec3(f_uv, materials[f_material].albedoIndex)
@@ -57,11 +49,7 @@ void main() {
 	bumpMatrix[2] = f_normal;
 
 	vec3 normal = bumpMatrix * bump;
-	if (f_uv.x > 0.5f) {
-		normal = bumpMatrix * bump;
-	} else {
-		normal = f_normal;
-	}
+	normal = normalize(normal);
 
 	vec3 lightDirection = normalize(lightPosition - f_position);
 	vec3 viewDirection = normalize(f_position - cameraPosition);
@@ -73,6 +61,8 @@ void main() {
 	light += specular * pow(max(dot(viewDirection, reflectDirection), 0.0f), 32.0f);
     
 	light *= 1.0f / (1.0f + 0.1 * distance(f_position, lightPosition));
+	//light = min(2.0, light);
 
 	fragColor = vec4(light * lightColor * albedo, 1.0);
+	//fragColor.xyz /= fragColor.xyz + vec3(1.0f);
 }

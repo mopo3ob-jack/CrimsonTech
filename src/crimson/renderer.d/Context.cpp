@@ -1,10 +1,9 @@
-#include <glad/glad.h>
 #include <crimson/renderer.d/Context.hpp>
 #include <iostream>
 
 namespace ct {
 
-Context::Context(mstd::C8* title, mstd::I32 argc, char** argv) {
+Context::Context(const mstd::C8* title, mstd::I32 argc, const mstd::C8** argv) {
 	using namespace mstd;
 
 	glfwInit();
@@ -44,10 +43,18 @@ void Context::run() {
 	init();
 
 	while (!glfwWindowShouldClose(window)) {
+		glfwPollEvents();
+
 		update();
+
+		glfwSwapBuffers(window);
 	}
 
 	end();
+}
+
+Context::~Context() {
+	glfwTerminate();
 }
 
 }

@@ -2,13 +2,15 @@
 #define CT_CONTEXT_HPP
 
 #include <mstd/misc>
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include <glad/glad.h>
 
 namespace ct {
 
 class Context {
 public:
-	Context(mstd::C8* title, mstd::I32 argc = 0, char** argv = nullptr);
+	Context(const mstd::C8* title, mstd::I32 argc = 0, const mstd::C8** argv = nullptr);
 
 	~Context();
 
@@ -17,7 +19,9 @@ public:
 	virtual void init() {}
 	virtual void update() {}
 	virtual void end() {}
-	virtual void resize(mstd::I32 width, mstd::I32 height);
+	virtual void resize(mstd::I32 width, mstd::I32 height) {
+		glViewport(0, 0, width, height);
+	}
 
 	GLFWwindow* window;
 	GLFWmonitor* monitor;
