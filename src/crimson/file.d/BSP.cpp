@@ -198,13 +198,6 @@ static void minkowskiSum(
 	std::vector<U8> directions;
 	directions.resize(vertices.size());
 
-	std::cout << "BEFORE" << std::endl;
-	for (Size v = 0; v < vertices.size(); ++v) {
-		std::cout << std::string(vertices[v]) << std::endl;
-	}
-
-	std::cout << "MASKS AND NORMALS" << std::endl;
-
 	for (Size f = 0; f < faces.size(); ++f) {
 		const IndexedFace face = faces[f];
 	
@@ -236,11 +229,6 @@ static void minkowskiSum(
 			}
 			directions[face.vertices[v]] |= directionMask;
 		}
-	}
-
-	std::cout << "AFTER" << std::endl;
-	for (Size v = 0; v < vertices.size(); ++v) {
-		std::cout << std::string(vertices[v]) << std::endl;
 	}
 
 	for (Size f = 0; f < faces.size(); ++f) {
@@ -829,10 +817,6 @@ mstd::Bool BSP::clip(
 		result.point = to;
 		return false;
 	} else {
-		if (isSolid(nearSplit, &rootSplit)) {
-			std::cout << "ENDING WITH SOLID NODE" << std::endl;
-		}
-
 		result.plane = node.value;
 		result.point = nearSplit;
 		return true;

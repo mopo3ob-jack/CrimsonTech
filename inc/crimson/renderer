@@ -1,3 +1,4 @@
 #include "renderer.d/Shader.hpp"
 #include "renderer.d/VertexArray.hpp"
 #include "renderer.d/IndirectVertexArray.hpp"
+#include "renderer.d/TextureManager.hpp"

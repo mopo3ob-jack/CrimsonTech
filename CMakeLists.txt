@@ -26,11 +26,20 @@ FetchContent_Declare(
 	GIT_REPOSITORY https://github.com/assimp/assimp.git
 )
 
-FetchContent_MakeAvailable(mstd glfw assimp)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "inc" "*.hpp" "*.h")
+
+set(BUILD_SHARED_LIBS ON)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(mstd glfw assimp)
 
 add_library(crimson)
 target_compile_definitions(crimson PUBLIC _USE_MATH_DEFINES)
@@ -41,6 +50,7 @@ set_target_properties(crimson PROPERTIES CXX_STANDARD 20)
 
 add_subdirectory(src/glad)
 add_subdirectory(src/imgui)
+add_subdirectory(src/stb)
 add_subdirectory(src/crimson/renderer.d)
 add_subdirectory(src/crimson/file.d)
 add_subdirectory(src/crimson/game.d)
@@ -49,4 +59,5 @@ set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build crimson test programs")
 if (${CRIMSON_BUILD_TESTS})
 	add_subdirectory("tests/bsp")
 	add_subdirectory("tests/indirect")
+	add_subdirectory("tests/texture")
 endif()

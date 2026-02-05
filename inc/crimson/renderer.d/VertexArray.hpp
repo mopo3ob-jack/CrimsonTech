@@ -16,6 +16,7 @@ public:
 		GLint size;
 		GLenum type;
 		GLboolean normalized;
+		mstd::Bool integral = false;
 	};
 
 	VertexArray() {}
@@ -24,7 +25,8 @@ public:
 		std::span<const Attribute> attributes,
 		mstd::Size vertexCount,
 		mstd::Size elementCount,
-		mstd::Size elementSize
+		mstd::Size elementSize,
+		const void* data = nullptr
 	);
 
 	VertexArray(VertexArray& vertexArray) = delete;
@@ -53,10 +55,6 @@ public:
 		}
 	}
 
-	void allocateAttributes(const std::vector<Attribute>& attributes, mstd::Size vertexCount);
-
-	void allocateElements(mstd::Size bufferSize);
-
 	template <typename T>
 	void writeAttributes(mstd::Size attribute, T* data, GLsizeiptr count, GLintptr offset = 0L) {
 		glNamedBufferSubData(
@@ -75,7 +73,30 @@ public:
 	template <typename T> requires std::is_integral_v<T>
 	void draw(GLsizei count, mstd::Size offset) const;
 
-//protected:
+	mstd::Status load(
+		const mstd::C8* inputPath,
+		mstd::U32& vertexCount,
+		mstd::U32 elementCount,
+		mstd::Arena& arena
+	);
+
+	struct ConvertOptions {
+		mstd::I32 positions = 0;
+		mstd::I32 materials = 1;
+		mstd::I32 uvs = 2;
+		mstd::I32 normals = 3;
+		mstd::I32 tangents = 4;
+		mstd::I32 bitangents = 5;
+	};
+
+	static mstd::Status convert(
+		const mstd::C8* inputPath,
+		const mstd::C8* outputPath,
+		ConvertOptions options,
+		mstd::Arena& arena
+	);
+
+protected:
 	std::vector<GLintptr> attributeOffsets;
 
 	GLuint vbo = 0;
