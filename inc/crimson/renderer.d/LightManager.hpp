@@ -4,7 +4,7 @@
 #include <crimson/renderer.d/DirectionalLight.hpp>
 #include <crimson/renderer.d/Shader.hpp>
 #include <bitset>
-#include <glad/glad.h>
+#include <crimson/renderer.d/gl.hpp>
 
 namespace ct {
 

@@ -1,7 +1,7 @@
 #ifndef CT_TEXTUREMANAGER_HPP
 #define CT_TEXTUREMANAGER_HPP
 
-#include <glad/glad.h>
+#include <crimson/renderer.d/gl.hpp>
 #include <mstd/geometry>
 #include <iostream>
 

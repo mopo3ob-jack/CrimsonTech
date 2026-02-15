@@ -2,9 +2,9 @@
 #define CT_CONTEXT_HPP
 
 #include <mstd/misc>
+#include <crimson/renderer.d/gl.hpp>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-#include <glad/glad.h>
 
 namespace ct {
 

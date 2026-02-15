@@ -11,6 +11,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchContent)
 include(FindOpenGL)
 
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 FetchContent_Declare(
 	mstd
 	GIT_REPOSITORY https://github.com/mopo3ob-jack/mstd.git
@@ -30,7 +33,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "inc" "*.hpp" "*.h")
 
-set(BUILD_SHARED_LIBS ON)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
@@ -41,11 +43,13 @@ set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(mstd glfw assimp)
 
+find_library(steam steam_api64 PATHS lib/win64 lib/linux64 REQUIRED)
+
 add_library(crimson)
 target_compile_definitions(crimson PUBLIC _USE_MATH_DEFINES)
 target_include_directories(crimson PUBLIC inc/ ${INSTALL_LOCATION}/include)
 target_link_directories(crimson PUBLIC ${INSTALL_LOCATION}/lib)
-target_link_libraries(crimson PUBLIC mstd glfw OpenGL::GL OpenGL::GLU assimp)
+target_link_libraries(crimson PUBLIC mstd glfw OpenGL::GL OpenGL::GLU assimp ${steam})
 set_target_properties(crimson PROPERTIES CXX_STANDARD 20)
 
 add_subdirectory(src/glad)

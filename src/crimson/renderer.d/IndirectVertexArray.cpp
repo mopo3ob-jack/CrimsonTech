@@ -1,5 +1,4 @@
 #include <crimson/renderer.d/IndirectVertexArray.hpp>
-#include <GL/glu.h>
 
 namespace ct {
 
