@@ -9,6 +9,12 @@ function(create_test name)
 	target_link_libraries(${PROJECT_NAME} PUBLIC crimson)
 	set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
 	add_subdirectory(src/${PROJECT_NAME})
+
+	set_target_properties(${name} PROPERTIES
+		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+		LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+		ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+	)
 endfunction()
 
 function(add_resource path)

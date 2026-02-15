@@ -11,7 +11,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchContent)
 include(FindOpenGL)
 
-set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 FetchContent_Declare(
@@ -64,4 +63,5 @@ if (${CRIMSON_BUILD_TESTS})
 	add_subdirectory("tests/bsp")
 	add_subdirectory("tests/indirect")
 	add_subdirectory("tests/texture")
+	add_subdirectory("tests/steamworks")
 endif()
