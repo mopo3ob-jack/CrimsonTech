@@ -15,6 +15,24 @@ function(create_test name)
 		LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 		ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 	)
+
+	add_custom_command(
+		TARGET ${name} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+		${LIBRARY_DIR}
+		$<TARGET_FILE_DIR:${name}>
+	)
+
+	set(appid ${CMAKE_CURRENT_SOURCE_DIR}/steam_appid.txt)
+	if (EXISTS ${appid})
+		configure_file(
+			${appid}
+			${CMAKE_CURRENT_BINARY_DIR}/steam_appid.txt
+			COPYONLY
+		)
+	else()
+		message(WARNING "No steam_appid.txt present")
+	endif()
 endfunction()
 
 function(add_resource path)

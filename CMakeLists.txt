@@ -42,8 +42,6 @@ set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(mstd glfw assimp)
 
-find_library(steam steam_api64 PATHS lib/win64 lib/linux64 REQUIRED)
-
 add_library(crimson)
 target_compile_definitions(crimson PUBLIC _USE_MATH_DEFINES)
 target_include_directories(crimson PUBLIC inc/ ${INSTALL_LOCATION}/include)
@@ -57,6 +55,12 @@ add_subdirectory(src/stb)
 add_subdirectory(src/crimson/renderer.d)
 add_subdirectory(src/crimson/file.d)
 add_subdirectory(src/crimson/game.d)
+
+if (WIN32)
+	set(LIBRARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/win64)
+else()
+	set(LIBRARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/linux64)
+endif()
 
 set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build crimson test programs")
 if (${CRIMSON_BUILD_TESTS})

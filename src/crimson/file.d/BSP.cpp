@@ -16,6 +16,8 @@
 
 namespace ct {
 
+static constexpr mstd::F32 EPSILON = 1.0f / 8192.0f;
+
 struct IndexedFace : Plane {
 	mstd::Size vertices[3];
 };
@@ -99,8 +101,6 @@ static mstd::Status import(
 static mstd::Size searchForVertex(std::span<mstd::Vector3f> vertices, mstd::Vector3f search) {
 	using namespace mstd;
 	
-	constexpr F32 EPSILON = 1.0f / 4096.0f;
-
 	constexpr auto isEqual = [](F32 x) {
 		return x >= -EPSILON && x <= EPSILON;
 	};
@@ -192,7 +192,6 @@ static void minkowskiSum(
 	constexpr Vector3f minAABB(-w, -w, -l);
 	constexpr Vector3f maxAABB(w, w, h);
 
-	constexpr F32 EPSILON = 1.0f / 4096.0f;
 	constexpr F32 ONE = 1.0f - EPSILON;
 
 	std::vector<U8> directions;
@@ -312,8 +311,6 @@ static mstd::Bool splitTriangle(const Plane& plane, const Face& face, std::optio
 	U8 frontCount = 0;
 	U8 backCount = 0;
 	U8 zeroVerts = 0;
-
-	constexpr F32 EPSILON = 1.0f / 4096.0f;
 	
 	const Vector3f* prev = face.vertices + 2;
 	const Vector3f* curr;
@@ -782,8 +779,6 @@ mstd::Bool BSP::clip(
 			return true;
 		}
 	}
-
-	constexpr F32 EPSILON = 1.0f / 4096.0f;
 
 	Bool side = fromDist < 0.0f;
 	F32 nearT, farT;
