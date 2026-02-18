@@ -2,7 +2,7 @@
 #define CT_SHADER_HPP
 
 #include <mstd/misc>
-#include <glad/glad.h>
+#include <crimson/renderer.d/gl.hpp>
 #include <vector>
 #include <string>
 

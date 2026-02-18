@@ -3,3 +3,4 @@
 #include <crimson/game.d/FlyCamera.hpp>
 #include <crimson/game.d/Player.hpp>
 #include <crimson/game.d/FreeCamera.hpp>
+#include <crimson/game.d/Timer.hpp>

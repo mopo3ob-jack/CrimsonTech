@@ -1,8 +1,7 @@
 #ifndef CT_STORAGEBUFFER_HPP
 #define CT_STORAGEBUFFER_HPP
 
-#include <glad/glad.h>
-#include <GL/glu.h>
+#include <crimson/renderer.d/gl.hpp>
 #include <mstd/memory>
 
 namespace ct {

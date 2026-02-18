@@ -1,4 +1,4 @@
 target_sources(
-	crimson PRIVATE 
+	crimson PUBLIC 
 	${CMAKE_CURRENT_SOURCE_DIR}/glad.c
 )

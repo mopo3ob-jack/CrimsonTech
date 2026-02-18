@@ -12,7 +12,7 @@ void Player::update(BSP& bsp) {
 	constexpr F32 groundAcceleration = 60.0f;
 	constexpr F32 airAcceleration = 10.0f;
 	constexpr F32 maxVelocity = 5.0f;
-	constexpr F32 EPSILON = 1.0f / 4096.0f;
+	constexpr F32 EPSILON = 1.0f / 8192.0f;
 
 	Vector3f acceleration = Vector3f(0.0f);
 	if (keyMask & FORWARD) {
@@ -48,6 +48,9 @@ void Player::update(BSP& bsp) {
 
 	++airFrames;
 	velocity += acceleration * Time::deltaTime;
+	std::cout
+		<< "a*dt = " << std::string(acceleration * Time::deltaTime)
+		<< "\t|a*dt| = " << magnitude(acceleration * Time::deltaTime) << "\n";
 
 	if (magnitude(velocity) == 0.0f) {
 		Camera::update();
@@ -68,6 +71,8 @@ void Player::update(BSP& bsp) {
 		}
 
 		velocity = delta / Time::deltaTime;
+			std::cout
+				<< "delta = " << std::string(delta) << "\t|delta| = " << magnitude(delta) << "\n";
 
 		position = result.point;
 

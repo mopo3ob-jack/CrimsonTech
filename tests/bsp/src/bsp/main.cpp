@@ -73,7 +73,7 @@ int main() {
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init();
 
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 
 	glViewport(0, 0, mode->width, mode->height);
 	glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -116,7 +116,18 @@ int main() {
 	F32 previousTime = 0.0f;
 
 	Size imguiFrames = 0;
+	Timer guiLoop;
+	Timer renderLoop;
+	Timer guiDrawLoop;
+	Timer frameTime;
+	frameTime.start();
+
+	F32 maxFPS = 100.0;
 	do {
+		if (frameTime.get() < 1.0 / maxFPS) {
+			continue;
+		}
+		frameTime.restart();
 		glfwPollEvents();
 		Time::update();
 
@@ -125,6 +136,7 @@ int main() {
 			continue;
 		}
 
+		guiLoop.start();
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
@@ -137,8 +149,10 @@ int main() {
 		}
 
 		ImGui::Begin("Info");
-		ImGui::Text("FPS = %d", fps);
+		ImGui::Text("FPS = %d", I32(fps));
+		ImGui::SliderFloat("FPS Max", &maxFPS, 60.0, 600.0);
 		ImGui::End();
+		guiLoop.stop();
 
 		if (glfwGetKey(window, GLFW_KEY_TAB)) {
 			++imguiFrames;
@@ -202,6 +216,7 @@ int main() {
 		
 		player.update(bsp);
 
+		renderLoop.start();
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		Matrix4f rotationMatrix = Matrix4f(1.0f);
@@ -224,17 +239,24 @@ int main() {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		glUniform1i(wireframeUniform, 0);
 		bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
+		renderLoop.stop();
 
 		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		//glClear(GL_DEPTH_BUFFER_BIT);
 		//glUniform1i(wireframeUniform, 1);
 		//bsp.vertexArray.draw<U32>(bsp.elementCount, 0);
 
+		guiDrawLoop.start();
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		guiDrawLoop.stop();
 
 		glfwSwapBuffers(window);
 	} while (!glfwWindowShouldClose(window));
+
+	std::cout << "GUI Loop: " << guiLoop.get() << std::endl;
+	std::cout << "Render Loop: " << renderLoop.get() << std::endl;
+	std::cout << "GUI Draw Loop: " << guiDrawLoop.get() << std::endl;
 
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();

@@ -1,5 +1,4 @@
 #include <crimson/renderer.d/TextureManager.hpp>
-#include <GL/glu.h>
 #include <iostream>
 
 namespace ct {

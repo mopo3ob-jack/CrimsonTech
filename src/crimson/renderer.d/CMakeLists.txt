@@ -1,5 +1,5 @@
 target_sources(
-	crimson PRIVATE
+	crimson PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/Shader.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/VertexArray.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/IndirectVertexArray.cpp

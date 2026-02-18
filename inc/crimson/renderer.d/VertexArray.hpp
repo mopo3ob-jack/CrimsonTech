@@ -1,7 +1,7 @@
 #ifndef CT_VERTEXARRAY_HPP
 #define CT_VERTEXARRAY_HPP
 
-#include <glad/glad.h>
+#include <crimson/renderer.d/gl.hpp>
 #include <vector>
 #include <mstd/memory>
 #include <type_traits>

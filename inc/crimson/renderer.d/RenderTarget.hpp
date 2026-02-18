@@ -1,7 +1,7 @@
 #ifndef CT_RENDERTARGET_HPP
 #define CT_RENDERTARGET_HPP
 
-#include <glad/glad.h>
+#include <crimson/renderer.d/gl.hpp>
 
 namespace ct {
 
