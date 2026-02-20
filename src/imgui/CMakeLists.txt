@@ -1,5 +1,5 @@
 target_sources(
-	crimson PUBLIC 
+	crimson PRIVATE 
 	${CMAKE_CURRENT_SOURCE_DIR}/imgui.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/imgui_demo.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/imgui_draw.cpp

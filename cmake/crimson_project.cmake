@@ -4,11 +4,11 @@ function(create_test name)
 	project(${name} VERSION 1.0.0)
 	file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "inc" "*.hpp" "*.h")
 
-	add_executable(${PROJECT_NAME})
-	target_include_directories(${PROJECT_NAME} PUBLIC inc/${PROJECT_NAME})
-	target_link_libraries(${PROJECT_NAME} PUBLIC crimson)
-	set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
-	add_subdirectory(src/${PROJECT_NAME})
+	add_executable(${name})
+	target_include_directories(${name} PUBLIC inc/${name})
+	target_link_libraries(${name} PUBLIC crimson)
+	set_target_properties(${name} PROPERTIES CXX_STANDARD 20)
+	add_subdirectory(src/${name})
 
 	set_target_properties(${name} PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -18,10 +18,14 @@ function(create_test name)
 
 	add_custom_command(
 		TARGET ${name} POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_directory
-		${LIBRARY_DIR}
-		$<TARGET_FILE_DIR:${name}>
+		COMMAND ${CMAKE_COMMAND} -E copy
+		${STEAM_LIB}
+		${CMAKE_CURRENT_BINARY_DIR}
 	)
+
+	message("CURRENT TARGET FILE DIR IS: ${CMAKE_CURRENT_BINARY_DIR}")
+
+	message("CURRENT LIBRARY DIR IS: ${LIBRARY_DIR}")
 
 	set(appid ${CMAKE_CURRENT_SOURCE_DIR}/steam_appid.txt)
 	if (EXISTS ${appid})

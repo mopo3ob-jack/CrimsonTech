@@ -42,11 +42,24 @@ set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(mstd glfw assimp)
 
+add_library(steam SHARED IMPORTED)
+if (WIN32)
+	set(STEAM_LIB ${CMAKE_CURRENT_SOURCE_DIR}/lib/win64/steam_api64.dll)
+	set_target_properties(
+		steam PROPERTIES
+		IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/lib/win64/steam_api64.lib
+	)
+else()
+	set(STEAM_LIB ${CMAKE_CURRENT_SOURCE_DIR}/lib/linux64/libsteam_api.so)
+endif()
+
+set_target_properties(steam PROPERTIES IMPORTED_LOCATION ${STEAM_LIB})
+
 add_library(crimson)
 target_compile_definitions(crimson PUBLIC _USE_MATH_DEFINES)
 target_include_directories(crimson PUBLIC inc/ ${INSTALL_LOCATION}/include)
 target_link_directories(crimson PUBLIC ${INSTALL_LOCATION}/lib)
-target_link_libraries(crimson PUBLIC mstd glfw OpenGL::GL OpenGL::GLU assimp ${steam})
+target_link_libraries(crimson PUBLIC mstd glfw OpenGL::GL OpenGL::GLU assimp steam)
 set_target_properties(crimson PROPERTIES CXX_STANDARD 20)
 
 add_subdirectory(src/glad)
@@ -56,16 +69,10 @@ add_subdirectory(src/crimson/renderer.d)
 add_subdirectory(src/crimson/file.d)
 add_subdirectory(src/crimson/game.d)
 
-if (WIN32)
-	set(LIBRARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/win64)
-else()
-	set(LIBRARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/linux64)
-endif()
-
 set(CRIMSON_BUILD_TESTS TRUE CACHE BOOL "Build crimson test programs")
 if (${CRIMSON_BUILD_TESTS})
-	add_subdirectory("tests/bsp")
-	add_subdirectory("tests/indirect")
-	add_subdirectory("tests/texture")
-	add_subdirectory("tests/steamworks")
+	add_subdirectory(tests/bsp)
+	add_subdirectory(tests/indirect)
+	add_subdirectory(tests/texture)
+	add_subdirectory(tests/steamworks)
 endif()
