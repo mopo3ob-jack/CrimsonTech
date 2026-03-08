@@ -23,10 +23,6 @@ function(create_test name)
 		${CMAKE_CURRENT_BINARY_DIR}
 	)
 
-	message("CURRENT TARGET FILE DIR IS: ${CMAKE_CURRENT_BINARY_DIR}")
-
-	message("CURRENT LIBRARY DIR IS: ${LIBRARY_DIR}")
-
 	set(appid ${CMAKE_CURRENT_SOURCE_DIR}/steam_appid.txt)
 	if (EXISTS ${appid})
 		configure_file(

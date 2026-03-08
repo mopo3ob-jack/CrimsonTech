@@ -18,15 +18,8 @@ FetchContent_Declare(
 	GIT_REPOSITORY https://github.com/mopo3ob-jack/mstd.git
 )
 
-FetchContent_Declare(
-	glfw
-	GIT_REPOSITORY https://github.com/glfw/glfw.git
-)
-
-FetchContent_Declare(
-	assimp
-	GIT_REPOSITORY https://github.com/assimp/assimp.git
-)
+find_package(glfw3 REQUIRED)
+find_package(assimp REQUIRED)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -40,7 +33,7 @@ set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(mstd glfw assimp)
+FetchContent_MakeAvailable(mstd)
 
 add_library(steam SHARED IMPORTED)
 if (WIN32)
